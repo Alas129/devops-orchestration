@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1.7
+# Migration-runner image: golang-migrate binary + the service's SQL files +
+# a small entrypoint that mints an RDS IAM auth token and runs `migrate up`.
+
+FROM golang:1.22-alpine AS build
+WORKDIR /src
+RUN apk add --no-cache git
+RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.1
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates aws-cli postgresql-client
+COPY --from=build /go/bin/migrate /usr/local/bin/migrate
+COPY migrations /migrations
+COPY <<'EOF' /entrypoint.sh
+#!/bin/sh
+set -euo pipefail
+
+: "${DB_HOST:?required}"
+: "${DB_NAME:?required}"
+: "${DB_USER:?required}"
+: "${AWS_REGION:=us-east-1}"
+
+# Ask AWS for an IAM auth token (15 min lifetime).
+TOKEN="$(aws --region "$AWS_REGION" rds generate-db-auth-token \
+  --hostname "$DB_HOST" --port 5432 --username "$DB_USER")"
+
+# URL-encode the token (it contains '/' and '=').
+ENCODED="$(printf %s "$TOKEN" | jq -sRr @uri 2>/dev/null || python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.stdin.read(),safe=""))')"
+
+DSN="postgres://${DB_USER}:${ENCODED}@${DB_HOST}:5432/${DB_NAME}?sslmode=require"
+
+exec migrate -path /migrations -database "$DSN" up
+EOF
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
