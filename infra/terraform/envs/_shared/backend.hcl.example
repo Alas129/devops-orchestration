@@ -1,0 +1,6 @@
+# Copy to backend.hcl (gitignored) and fill in from bootstrap outputs.
+# Then: terraform init -backend-config=backend.hcl
+bucket         = "usf-devops-tfstate-<ACCOUNT_ID>"
+region         = "us-east-1"
+dynamodb_table = "usf-devops-tflock"
+kms_key_id     = "<kms_key_arn from bootstrap output>"

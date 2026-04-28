@@ -1,0 +1,46 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Sensitive
+*.tfvars
+!example.tfvars
+.envrc
+.env
+.env.local
+
+# Build artifacts
+node_modules/
+dist/
+.next/
+out/
+*.log
+coverage/
+.DS_Store
+
+# Go
+bin/
+vendor/
+*.exe
+*.test
+*.out
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local kubeconfigs
+kubeconfig*
