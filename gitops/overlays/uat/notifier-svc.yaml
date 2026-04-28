@@ -1,0 +1,18 @@
+image:
+  repository: REPLACE_ECR_REGISTRY/usf-devops/notifier-svc
+  tag: git-replaceme
+
+migration:
+  enabled: true
+  image: REPLACE_ECR_REGISTRY/usf-devops/notifier-svc-migrate
+
+ingress:
+  enabled: true
+  host: api.uat.example.com
+  pathPrefix: /api/v1/notifier
+
+serviceAccount:
+  irsaRoleArn: REPLACE_UAT_NOTIFIER_SVC_IRSA_ARN
+
+externalSecret:
+  enabled: false

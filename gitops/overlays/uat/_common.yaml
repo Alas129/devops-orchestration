@@ -1,0 +1,23 @@
+# Shared values applied to every chart in the uat namespace.
+# Per-service overlay files override / extend.
+
+env: uat
+
+config:
+  awsRegion: us-east-1
+  dbHost: REPLACE_RDS_ENDPOINT     # filled in once after `terraform apply` completes
+  dbName: uatops_uat
+  dbUser: app_uat
+  useIamAuth: true
+  natsUrl: nats://nats.messaging.svc.cluster.local:4222
+
+ingress:
+  className: alb
+  certificateArn: REPLACE_UAT_ACM_ARN
+
+monitoring:
+  serviceMonitor: { enabled: true, interval: 30s }
+  prometheusRule: { enabled: true }
+
+networkPolicy:
+  enabled: true

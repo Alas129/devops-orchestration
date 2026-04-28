@@ -1,0 +1,23 @@
+# Shared values applied to every chart in the dev namespace.
+# Per-service overlay files override / extend.
+
+env: dev
+
+config:
+  awsRegion: us-east-1
+  dbHost: REPLACE_RDS_ENDPOINT     # filled in once after `terraform apply` completes
+  dbName: devops_dev
+  dbUser: app_dev
+  useIamAuth: true
+  natsUrl: nats://nats.messaging.svc.cluster.local:4222
+
+ingress:
+  className: alb
+  certificateArn: REPLACE_DEV_ACM_ARN
+
+monitoring:
+  serviceMonitor: { enabled: true, interval: 30s }
+  prometheusRule: { enabled: true }
+
+networkPolicy:
+  enabled: true

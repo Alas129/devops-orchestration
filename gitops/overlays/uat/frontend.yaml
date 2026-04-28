@@ -1,0 +1,12 @@
+image:
+  repository: REPLACE_ECR_REGISTRY/usf-devops/frontend
+  tag: git-replaceme
+
+ingress:
+  enabled: true
+  host: app.uat.example.com
+
+# frontend doesn't expose Prometheus metrics — keep ServiceMonitor off.
+monitoring:
+  serviceMonitor:
+    enabled: false
