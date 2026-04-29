@@ -1,0 +1,90 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "notifier-svc.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "notifier-svc.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    canary:
+      canaryService: {{ include "notifier-svc.fullname" . }}-canary
+      stableService: {{ include "notifier-svc.fullname" . }}
+      trafficRouting:
+        alb:
+          ingress: {{ include "notifier-svc.fullname" . }}
+          servicePort: {{ .Values.service.port }}
+      maxSurge: 25%
+      maxUnavailable: 0
+      {{- if .Values.rollout.analysis.enabled }}
+      analysis:
+        templates:
+          - templateName: {{ include "notifier-svc.fullname" . }}-analysis
+        startingStep: 1
+        args:
+          - name: service
+            value: {{ include "notifier-svc.fullname" . }}
+          - name: namespace
+            value: {{ .Release.Namespace }}
+      {{- end }}
+      steps:
+{{ toYaml .Values.rollout.steps | indent 8 }}
+  selector:
+    matchLabels: {{- include "notifier-svc.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "notifier-svc.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "notifier-svc.selectorLabels" . | nindent 14 }}
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          env:
+            - name: LISTEN_ADDR
+              value: ":{{ .Values.service.port }}"
+            - name: DB_HOST
+              value: {{ .Values.config.dbHost | quote }}
+            - name: DB_NAME
+              value: {{ .Values.config.dbName | quote }}
+            - name: DB_USER
+              value: {{ .Values.config.dbUser | quote }}
+            - name: DB_IAM_AUTH
+              value: {{ .Values.config.useIamAuth | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.config.awsRegion | quote }}
+            - name: NATS_URL
+              value: {{ .Values.config.natsUrl | quote }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]

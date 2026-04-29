@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "notifier-svc.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "notifier-svc.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector: {{- include "notifier-svc.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "notifier-svc.fullname" . }}-canary
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "notifier-svc.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector: {{- include "notifier-svc.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http

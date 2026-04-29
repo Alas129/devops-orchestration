@@ -1,0 +1,82 @@
+env: dev
+image:
+  repository: ""
+  tag: "git-replaceme"
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  port: 8080
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: alb
+  host: api.dev.example.com
+  pathPrefix: /api/v1/notifier
+  certificateArn: ""
+  tlsHost: ""
+
+serviceAccount:
+  create: true
+  name: notifier-svc
+  irsaRoleArn: ""
+
+resources:
+  requests: { cpu: 100m, memory: 128Mi }
+  limits:   { memory: 256Mi }
+
+probes:
+  readiness: { path: /healthz, initialDelaySeconds: 5, periodSeconds: 5 }
+  liveness:  { path: /livez,    initialDelaySeconds: 10, periodSeconds: 10 }
+
+hpa:
+  enabled: true
+  min: 2
+  max: 4
+  cpuTarget: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+rollout:
+  steps:
+    - setWeight: 10
+    - pause: { duration: 2m }
+    - setWeight: 50
+    - pause: { duration: 3m }
+    - setWeight: 100
+  analysis:
+    enabled: true
+    successRateThreshold: "0.99"
+    p95LatencyThreshold: "1.0"
+
+config:
+  dbName: devops_dev
+  dbUser: app_dev
+  dbHost: ""
+  useIamAuth: true
+  awsRegion: us-east-1
+  natsUrl: nats://nats.messaging.svc.cluster.local:4222
+
+# notifier-svc has no JWT secret; remove the ExternalSecret from rendering.
+externalSecret:
+  enabled: false
+  jwtSsmPath: ""
+
+migration:
+  enabled: true
+  image: ""                       # set per env to ECR URI of notifier-svc-migrate
+  ttlSecondsAfterFinished: 300
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+  prometheusRule:
+    enabled: true
+
+networkPolicy:
+  enabled: true

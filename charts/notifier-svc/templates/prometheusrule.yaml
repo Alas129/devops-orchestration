@@ -1,0 +1,40 @@
+{{- if .Values.monitoring.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "notifier-svc.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "notifier-svc.labels" . | nindent 4 }}
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: notifier-svc.slo
+      interval: 30s
+      rules:
+        - alert: AuthSvcHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}",status=~"5..",app_kubernetes_io_name="notifier-svc"}[5m]))
+              /
+            sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}",app_kubernetes_io_name="notifier-svc"}[5m])) > 0.01
+          for: 5m
+          labels:
+            severity: critical
+            service: notifier-svc
+            env: {{ .Values.env }}
+          annotations:
+            summary: "notifier-svc 5xx > 1% for 5m"
+            description: "notifier-svc in {{ .Release.Namespace }} is exceeding the 1% error budget"
+        - alert: AuthSvcHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(http_request_duration_seconds_bucket{namespace="{{ .Release.Namespace }}",app_kubernetes_io_name="notifier-svc"}[5m]))
+            ) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+            service: notifier-svc
+            env: {{ .Values.env }}
+          annotations:
+            summary: "notifier-svc p95 latency > 500ms for 10m"
+{{- end }}

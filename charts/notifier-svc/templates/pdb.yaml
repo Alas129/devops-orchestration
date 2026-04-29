@@ -1,0 +1,12 @@
+{{- if .Values.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "notifier-svc.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "notifier-svc.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels: {{- include "notifier-svc.selectorLabels" . | nindent 6 }}
+{{- end }}
