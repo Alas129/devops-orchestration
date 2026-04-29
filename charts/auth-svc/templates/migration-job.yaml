@@ -1,0 +1,37 @@
+{{- if .Values.migration.enabled }}
+# ArgoCD PreSync hook — runs migrations BEFORE any new pods roll out.
+# Failure aborts the sync, so the previous version keeps serving uninterrupted.
+# Image: a per-service `<svc>-migrate:<tag>` image built in CI (golang-migrate
+# binary + the SQL files from apps/<svc>/migrations baked in at /migrations).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "auth-svc.fullname" . }}-migrate
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "auth-svc.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  ttlSecondsAfterFinished: {{ .Values.migration.ttlSecondsAfterFinished }}
+  backoffLimit: 1
+  template:
+    metadata:
+      labels: {{- include "auth-svc.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      containers:
+        - name: migrate
+          image: "{{ .Values.migration.image }}:{{ .Values.image.tag }}"
+          env:
+            - name: DB_HOST
+              value: {{ .Values.config.dbHost | quote }}
+            - name: DB_NAME
+              value: {{ .Values.config.dbName | quote }}
+            - name: DB_USER
+              value: {{ .Values.config.dbUser | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.config.awsRegion | quote }}
+{{- end }}

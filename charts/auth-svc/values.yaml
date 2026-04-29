@@ -1,0 +1,95 @@
+env: dev                       # overridden per env
+image:
+  repository: ""               # filled in from gitops overlay (ECR URI)
+  tag: "git-replaceme"         # bumped by release bot
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  port: 8080
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: alb
+  host: api.dev.example.com
+  pathPrefix: /api/v1/auth
+  certificateArn: ""
+  tlsHost: ""
+
+serviceAccount:
+  create: true
+  name: auth-svc
+  irsaRoleArn: ""              # set per env from terraform output
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi               # NB: no CPU limit, avoid CFS throttling
+
+probes:
+  readiness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 5
+  liveness:
+    path: /livez
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+hpa:
+  enabled: true
+  min: 2
+  max: 6
+  cpuTarget: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+# Argo Rollouts canary, with Prometheus-driven AnalysisTemplate.
+rollout:
+  steps:
+    - setWeight: 10
+    - pause: { duration: 2m }
+    - setWeight: 25
+    - pause: { duration: 2m }
+    - setWeight: 50
+    - pause: { duration: 5m }
+    - setWeight: 100
+  analysis:
+    enabled: true
+    successRateThreshold: "0.99"
+    p95LatencyThreshold: "0.5"
+
+config:
+  jwtIssuer: auth-svc
+  jwtTtl: 1h
+  dbName: devops_dev
+  dbUser: app_dev
+  dbHost: ""                   # rds endpoint, set per env
+  useIamAuth: true
+  awsRegion: us-east-1
+
+# JWT signing secret comes from SSM via ExternalSecret.
+externalSecret:
+  enabled: true
+  jwtSsmPath: /devops/auth-svc/jwt-secret
+
+migration:
+  enabled: true
+  image: migrate/migrate:v4.18.1
+  ttlSecondsAfterFinished: 300
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+  prometheusRule:
+    enabled: true
+
+networkPolicy:
+  enabled: true

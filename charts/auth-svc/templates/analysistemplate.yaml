@@ -1,0 +1,46 @@
+{{- if .Values.rollout.analysis.enabled }}
+# Argo Rollouts queries Prometheus during canary steps; if these checks fail,
+# the rollout pauses and rolls back.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "auth-svc.fullname" . }}-analysis
+  namespace: {{ .Release.Namespace }}
+spec:
+  args:
+    - name: service
+    - name: namespace
+  metrics:
+    - name: success-rate
+      interval: 30s
+      successCondition: result[0] >= {{ .Values.rollout.analysis.successRateThreshold }}
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(http_requests_total{
+                namespace="{{ "{{args.namespace}}" }}",
+                app_kubernetes_io_name="{{ "{{args.service}}" }}",
+                status!~"5.."
+            }[2m]))
+            /
+            sum(rate(http_requests_total{
+                namespace="{{ "{{args.namespace}}" }}",
+                app_kubernetes_io_name="{{ "{{args.service}}" }}"
+            }[2m]))
+    - name: p95-latency
+      interval: 30s
+      successCondition: result[0] <= {{ .Values.rollout.analysis.p95LatencyThreshold }}
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(http_request_duration_seconds_bucket{
+                namespace="{{ "{{args.namespace}}" }}",
+                app_kubernetes_io_name="{{ "{{args.service}}" }}"
+              }[2m]))
+            )
+{{- end }}
