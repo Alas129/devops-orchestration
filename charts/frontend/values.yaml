@@ -1,0 +1,54 @@
+env: dev
+image:
+  repository: ""
+  tag: "git-replaceme"
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  port: 3000
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: alb
+  host: app.dev.example.com
+  certificateArn: ""
+
+serviceAccount:
+  create: true
+  name: frontend
+
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits:   { memory: 512Mi }
+
+probes:
+  readiness: { path: /api/healthz, initialDelaySeconds: 5, periodSeconds: 5 }
+  liveness:  { path: /api/healthz, initialDelaySeconds: 15, periodSeconds: 10 }
+
+hpa:
+  enabled: true
+  min: 2
+  max: 6
+  cpuTarget: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+# Blue/green: keep the previous ReplicaSet warm for 5 min after switch.
+# An ALB target group flip is the only "deploy" event clients see.
+blueGreen:
+  scaleDownDelaySeconds: 300
+  autoPromotionEnabled: true
+
+config:
+  authApiUrl: http://auth-svc.app.svc.cluster.local:8080
+  tasksApiUrl: http://tasks-svc.app.svc.cluster.local:8080
+  notifierApiUrl: http://notifier-svc.app.svc.cluster.local:8080
+
+monitoring:
+  serviceMonitor:
+    enabled: false                # Next.js doesn't expose prom metrics by default
