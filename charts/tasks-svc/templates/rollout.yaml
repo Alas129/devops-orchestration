@@ -1,0 +1,97 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "tasks-svc.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "tasks-svc.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    canary:
+      canaryService: {{ include "tasks-svc.fullname" . }}-canary
+      stableService: {{ include "tasks-svc.fullname" . }}
+      trafficRouting:
+        alb:
+          ingress: {{ include "tasks-svc.fullname" . }}
+          servicePort: {{ .Values.service.port }}
+      maxSurge: 25%
+      maxUnavailable: 0
+      {{- if .Values.rollout.analysis.enabled }}
+      analysis:
+        templates:
+          - templateName: {{ include "tasks-svc.fullname" . }}-analysis
+        startingStep: 1
+        args:
+          - name: service
+            value: {{ include "tasks-svc.fullname" . }}
+          - name: namespace
+            value: {{ .Release.Namespace }}
+      {{- end }}
+      steps:
+{{ toYaml .Values.rollout.steps | indent 8 }}
+  selector:
+    matchLabels: {{- include "tasks-svc.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "tasks-svc.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "tasks-svc.selectorLabels" . | nindent 14 }}
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          env:
+            - name: LISTEN_ADDR
+              value: ":{{ .Values.service.port }}"
+            - name: DB_HOST
+              value: {{ .Values.config.dbHost | quote }}
+            - name: DB_NAME
+              value: {{ .Values.config.dbName | quote }}
+            - name: DB_USER
+              value: {{ .Values.config.dbUser | quote }}
+            - name: DB_IAM_AUTH
+              value: {{ .Values.config.useIamAuth | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.config.awsRegion | quote }}
+            - name: JWT_ISSUER
+              value: {{ .Values.config.jwtIssuer | quote }}
+            - name: NATS_URL
+              value: {{ .Values.config.natsUrl | quote }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tasks-svc.fullname" . }}-jwt
+                  key: jwt_secret
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
