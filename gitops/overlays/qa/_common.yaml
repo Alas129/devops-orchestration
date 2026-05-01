@@ -1,0 +1,22 @@
+# Shared values applied to every chart in the qa namespace.
+
+env: qa
+
+config:
+  awsRegion: us-east-1
+  dbHost: REPLACE_RDS_ENDPOINT
+  dbName: devops_qa
+  dbUser: app_qa
+  useIamAuth: true
+  natsUrl: nats://nats.messaging.svc.cluster.local:4222
+
+ingress:
+  className: alb
+  certificateArn: REPLACE_QA_ACM_ARN
+
+monitoring:
+  serviceMonitor: { enabled: true, interval: 30s }
+  prometheusRule: { enabled: true }
+
+networkPolicy:
+  enabled: true
