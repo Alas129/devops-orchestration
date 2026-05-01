@@ -1,0 +1,19 @@
+image:
+  repository: REPLACE_ECR_REGISTRY/usf-devops/auth-svc
+  tag: git-replaceme
+
+migration:
+  enabled: true
+  image: REPLACE_ECR_REGISTRY/usf-devops/auth-svc-migrate
+
+ingress:
+  enabled: true
+  host: api.prod.example.com
+  pathPrefix: /api/v1/auth
+
+serviceAccount:
+  irsaRoleArn: REPLACE_PROD_AUTH_SVC_IRSA_ARN
+
+externalSecret:
+  enabled: true
+  jwtSsmPath: /devops/auth-svc/jwt-secret
