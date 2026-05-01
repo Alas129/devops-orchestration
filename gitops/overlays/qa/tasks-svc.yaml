@@ -1,0 +1,19 @@
+image:
+  repository: REPLACE_ECR_REGISTRY/usf-devops/tasks-svc
+  tag: git-replaceme
+
+migration:
+  enabled: true
+  image: REPLACE_ECR_REGISTRY/usf-devops/tasks-svc-migrate
+
+ingress:
+  enabled: true
+  host: api.qa.example.com
+  pathPrefix: /api/v1/tasks
+
+serviceAccount:
+  irsaRoleArn: REPLACE_QA_TASKS_SVC_IRSA_ARN
+
+externalSecret:
+  enabled: true
+  jwtSsmPath: /devops/auth-svc/jwt-secret
