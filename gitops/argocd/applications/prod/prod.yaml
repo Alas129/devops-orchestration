@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: prod
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - { name: frontend }
+          - { name: auth-svc }
+          - { name: tasks-svc }
+          - { name: notifier-svc }
+  template:
+    metadata:
+      name: 'prod-{{ .name }}'
+      labels: { env: prod }
+    spec:
+      project: default
+      sources:
+        - repoURL: https://github.com/alusigmi/devops-orchestration.git
+          targetRevision: main
+          ref: values
+        - repoURL: https://github.com/alusigmi/devops-orchestration.git
+          targetRevision: main
+          path: 'charts/{{ .name }}'
+          helm:
+            releaseName: '{{ .name }}'
+            valueFiles:
+              - values.yaml
+              - $values/gitops/overlays/prod/_common.yaml
+              - '$values/gitops/overlays/prod/{{ .name }}.yaml'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: prod
+      syncPolicy:
+        # NB: prod requires self-heal=true to keep drift minimal but auto-prune
+        # is set to true; canary auto-rolls back via Argo Rollouts AnalysisTemplate.
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true, ServerSideApply=true, PruneLast=true]
