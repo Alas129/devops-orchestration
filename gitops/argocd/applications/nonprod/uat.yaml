@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: uat
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - { name: frontend }
+          - { name: auth-svc }
+          - { name: tasks-svc }
+          - { name: notifier-svc }
+  template:
+    metadata:
+      name: 'uat-{{ .name }}'
+      labels: { env: uat }
+    spec:
+      project: default
+      sources:
+        - repoURL: https://github.com/alusigmi/devops-orchestration.git
+          targetRevision: main
+          ref: values
+        - repoURL: https://github.com/alusigmi/devops-orchestration.git
+          targetRevision: main
+          path: 'charts/{{ .name }}'
+          helm:
+            releaseName: '{{ .name }}'
+            valueFiles:
+              - values.yaml
+              - $values/gitops/overlays/uat/_common.yaml
+              - '$values/gitops/overlays/uat/{{ .name }}.yaml'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: uat
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true, ServerSideApply=true, PruneLast=true]
