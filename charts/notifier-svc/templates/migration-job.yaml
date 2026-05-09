@@ -16,15 +16,17 @@ metadata:
 spec:
   ttlSecondsAfterFinished: {{ .Values.migration.ttlSecondsAfterFinished }}
   backoffLimit: 1
+  activeDeadlineSeconds: 600
   template:
     metadata:
       labels: {{- include "notifier-svc.selectorLabels" . | nindent 8 }}
     spec:
       restartPolicy: Never
       serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: migrate
-          image: "{{ .Values.migration.image }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.migration.image }}:{{ .Values.image.tag }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ end }}"
           env:
             - name: DB_HOST
               value: {{ .Values.config.dbHost | quote }}
@@ -34,4 +36,15 @@ spec:
               value: {{ .Values.config.dbUser | quote }}
             - name: AWS_REGION
               value: {{ .Values.config.awsRegion | quote }}
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
 {{- end }}

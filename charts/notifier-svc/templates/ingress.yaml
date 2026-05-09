@@ -1,4 +1,8 @@
 {{- if .Values.ingress.enabled }}
+{{- $lbAttrs := list "deregistration_delay.timeout_seconds=30" -}}
+{{- if .Values.ingress.accessLogsBucket -}}
+  {{- $lbAttrs = append $lbAttrs (printf "access_logs.s3.enabled=true,access_logs.s3.bucket=%s,access_logs.s3.prefix=notifier-svc" .Values.ingress.accessLogsBucket) -}}
+{{- end -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -9,10 +13,14 @@ metadata:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
     alb.ingress.kubernetes.io/healthcheck-path: /healthz
-    alb.ingress.kubernetes.io/load-balancer-attributes: deregistration_delay.timeout_seconds=30
+    alb.ingress.kubernetes.io/load-balancer-attributes: {{ join "," $lbAttrs | quote }}
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.certificateArn | quote }}
+    {{- with .Values.ingress.wafAclArn }}
+    alb.ingress.kubernetes.io/wafv2-acl-arn: {{ . | quote }}
+    {{- end }}
     external-dns.alpha.kubernetes.io/hostname: {{ .Values.ingress.host | quote }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}

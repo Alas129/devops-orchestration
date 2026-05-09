@@ -34,18 +34,45 @@ spec:
   template:
     metadata:
       labels: {{- include "notifier-svc.selectorLabels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.service.port }}"
+        prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
       terminationGracePeriodSeconds: 30
+      automountServiceAccountToken: true
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.topologySpread.enabled }}
       topologySpreadConstraints:
-        - maxSkew: 1
+        - maxSkew: {{ .Values.topologySpread.maxSkew }}
           topologyKey: topology.kubernetes.io/zone
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels: {{- include "notifier-svc.selectorLabels" . | nindent 14 }}
+        - maxSkew: {{ .Values.topologySpread.maxSkew }}
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "notifier-svc.selectorLabels" . | nindent 14 }}
+      {{- end }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: topology.kubernetes.io/zone
+                labelSelector:
+                  matchLabels: {{- include "notifier-svc.selectorLabels" . | nindent 20 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: app
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ end }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
@@ -65,6 +92,24 @@ spec:
               value: {{ .Values.config.awsRegion | quote }}
             - name: NATS_URL
               value: {{ .Values.config.natsUrl | quote }}
+            {{- with .Values.config.otelEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ . | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            - name: OTEL_SERVICE_NAME
+              value: {{ include "notifier-svc.fullname" $ }}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment={{ $.Values.env }},service.version={{ $.Values.image.tag }}"
+            {{- end }}
+          {{- if .Values.probes.startup.enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.probes.startup.path }}
+              port: http
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+          {{- end }}
           readinessProbe:
             httpGet:
               path: {{ .Values.probes.readiness.path }}
@@ -82,9 +127,14 @@ spec:
               exec:
                 command: ["/bin/sh", "-c", "sleep 10"]
           resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             capabilities:
               drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault

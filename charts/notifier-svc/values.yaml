@@ -2,6 +2,7 @@ env: dev
 image:
   repository: ""
   tag: "git-replaceme"
+  digest: ""
   pullPolicy: IfNotPresent
 
 replicaCount: 2
@@ -17,6 +18,7 @@ ingress:
   pathPrefix: /api/v1/notifier
   certificateArn: ""
   tlsHost: ""
+  wafAclArn: ""
 
 serviceAccount:
   create: true
@@ -27,8 +29,21 @@ resources:
   requests: { cpu: 100m, memory: 128Mi }
   limits:   { memory: 256Mi }
 
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
 probes:
-  readiness: { path: /healthz, initialDelaySeconds: 5, periodSeconds: 5 }
+  startup:
+    enabled: true
+    path: /healthz
+    failureThreshold: 30
+    periodSeconds: 5
+  readiness: { path: /healthz, initialDelaySeconds: 0, periodSeconds: 5 }
   liveness:  { path: /livez,    initialDelaySeconds: 10, periodSeconds: 10 }
 
 hpa:
@@ -36,10 +51,11 @@ hpa:
   min: 2
   max: 4
   cpuTarget: 70
+  memoryTarget: 75
 
 pdb:
   enabled: true
-  minAvailable: 1
+  maxUnavailable: 0
 
 rollout:
   steps:
@@ -53,6 +69,11 @@ rollout:
     successRateThreshold: "0.99"
     p95LatencyThreshold: "1.0"
 
+priorityClassName: ""
+topologySpread:
+  enabled: true
+  maxSkew: 1
+
 config:
   dbName: devops_dev
   dbUser: app_dev
@@ -60,6 +81,7 @@ config:
   useIamAuth: true
   awsRegion: us-east-1
   natsUrl: nats://nats.messaging.svc.cluster.local:4222
+  otelEndpoint: ""
 
 # notifier-svc has no JWT secret; remove the ExternalSecret from rendering.
 externalSecret:
@@ -74,7 +96,7 @@ migration:
 monitoring:
   serviceMonitor:
     enabled: true
-    interval: 30s
+    interval: 60s                 # higher cardinality consumer; scrape every 60s
   prometheusRule:
     enabled: true
 

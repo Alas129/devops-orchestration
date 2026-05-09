@@ -6,7 +6,13 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels: {{- include "notifier-svc.labels" . | nindent 4 }}
 spec:
+  {{- if hasKey .Values.pdb "maxUnavailable" }}
+  maxUnavailable: {{ .Values.pdb.maxUnavailable }}
+  {{- else if hasKey .Values.pdb "minAvailable" }}
   minAvailable: {{ .Values.pdb.minAvailable }}
+  {{- else }}
+  maxUnavailable: 0
+  {{- end }}
   selector:
     matchLabels: {{- include "notifier-svc.selectorLabels" . | nindent 6 }}
 {{- end }}
