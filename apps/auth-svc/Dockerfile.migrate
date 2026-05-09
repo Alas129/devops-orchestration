@@ -7,7 +7,7 @@ WORKDIR /src
 RUN apk add --no-cache git
 RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.1
 
-FROM alpine:3.20
+FROM alpine:3.23
 RUN apk add --no-cache ca-certificates aws-cli postgresql-client
 COPY --from=build /go/bin/migrate /usr/local/bin/migrate
 COPY migrations /migrations
