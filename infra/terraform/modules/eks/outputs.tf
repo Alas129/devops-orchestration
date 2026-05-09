@@ -33,3 +33,8 @@ output "cluster_security_group_id" {
 output "cluster_iam_role_arn" {
   value = module.eks.cluster_iam_role_arn
 }
+
+output "secrets_kms_key_arn" {
+  description = "KMS CMK used for envelope encryption of K8s secrets"
+  value       = aws_kms_key.secrets.arn
+}

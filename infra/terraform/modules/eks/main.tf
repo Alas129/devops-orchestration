@@ -1,3 +1,18 @@
+# KMS CMK used for envelope encryption of Kubernetes secrets in etcd.
+resource "aws_kms_key" "secrets" {
+  description             = "${var.cluster_name} K8s secret envelope encryption"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  tags = {
+    "Name" = "${var.cluster_name}-secrets"
+  }
+}
+
+resource "aws_kms_alias" "secrets" {
+  name          = "alias/${var.cluster_name}-secrets"
+  target_key_id = aws_kms_key.secrets.key_id
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.24"
@@ -9,10 +24,22 @@ module "eks" {
   subnet_ids               = var.private_subnet_ids
   control_plane_subnet_ids = var.intra_subnet_ids
 
-  cluster_endpoint_public_access = true
+  # Always enable private endpoint; public is only used by CI/admins via the
+  # narrow CIDR list. Set public_access_cidrs to [] in prod to go fully
+  # private (CI then goes through a self-hosted runner inside the VPC).
+  cluster_endpoint_private_access      = true
+  cluster_endpoint_public_access       = var.cluster_endpoint_public_access
   cluster_endpoint_public_access_cidrs = var.public_access_cidrs
 
   enable_cluster_creator_admin_permissions = true
+
+  # Envelope encryption for all secret resources stored in etcd.
+  cluster_encryption_config = {
+    provider_key_arn = aws_kms_key.secrets.arn
+    resources        = ["secrets"]
+  }
+
+  cloudwatch_log_group_retention_in_days = var.log_retention_days
 
   cluster_addons = {
     coredns                = { most_recent = true }
