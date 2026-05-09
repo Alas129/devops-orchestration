@@ -1,0 +1,601 @@
+---
+# Source: auth-svc/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: auth-svc
+      app.kubernetes.io/instance: auth-svc
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Same-namespace ingress (frontend, tasks-svc) and the ALB controller's
+    # health check (which lands in target-group SG).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 8080
+          protocol: TCP
+  egress:
+    # DNS, RDS, and AWS APIs (IAM auth token signer) — broad egress is OK
+    # because security boundary is at IAM, not network.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32  # IMDS — IRSA uses STS, not IMDS
+---
+# Source: auth-svc/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: auth-svc
+      app.kubernetes.io/instance: auth-svc
+---
+# Source: auth-svc/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: auth-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+  annotations:
+    eks.amazonaws.com/role-arn: "REPLACE_PROD_AUTH_SVC_IRSA_ARN"
+---
+# Source: auth-svc/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# Source: auth-svc/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-svc-canary
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# Source: auth-svc/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: auth-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+spec:
+  scaleTargetRef:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    name: auth-svc
+  minReplicas: 2
+  maxReplicas: 6
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        - type: Pods
+          value: 4
+          periodSeconds: 30
+        - type: Pods
+          value: 4
+          periodSeconds: 30
+      selectPolicy: Max
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+---
+# Source: auth-svc/templates/migration-job.yaml
+# ArgoCD PreSync hook — runs migrations BEFORE any new pods roll out.
+# Failure aborts the sync, so the previous version keeps serving uninterrupted.
+# Image: a per-service `<svc>-migrate:<tag>` image built in CI (golang-migrate
+# binary + the SQL files from apps/<svc>/migrations baked in at /migrations).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: auth-svc-migrate
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: auth-svc
+        app.kubernetes.io/instance: auth-svc
+    spec:
+      restartPolicy: Never
+      serviceAccountName: auth-svc
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: "REPLACE_ECR_REGISTRY/usf-devops/auth-svc-migrate:git-replaceme"
+          env:
+            - name: DB_HOST
+              value: "REPLACE_RDS_ENDPOINT"
+            - name: DB_NAME
+              value: "prodops_prod"
+            - name: DB_USER
+              value: "app_prod"
+            - name: AWS_REGION
+              value: "us-east-1"
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+---
+# Source: auth-svc/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: auth-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    alb.ingress.kubernetes.io/load-balancer-attributes: "deregistration_delay.timeout_seconds=30,access_logs.s3.enabled=true,access_logs.s3.bucket=REPLACE_PROD_ALB_LOGS_BUCKET,access_logs.s3.prefix=auth-svc"
+    alb.ingress.kubernetes.io/certificate-arn: "REPLACE_PROD_ACM_ARN"
+    external-dns.alpha.kubernetes.io/hostname: "api.prod.example.com"
+spec:
+  ingressClassName: alb
+  rules:
+    - host: api.prod.example.com
+      http:
+        paths:
+          - path: /api/v1/auth
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-svc
+                port:
+                  name: http
+---
+# Source: auth-svc/templates/analysistemplate.yaml
+# Argo Rollouts queries Prometheus during canary steps; if these checks fail,
+# the rollout pauses and rolls back.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: auth-svc-analysis
+  namespace: default
+spec:
+  args:
+    - name: service
+    - name: namespace
+  metrics:
+    - name: success-rate
+      interval: 30s
+      successCondition: result[0] >= 0.99
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(http_requests_total{
+                namespace="{{args.namespace}}",
+                app_kubernetes_io_name="{{args.service}}",
+                status!~"5.."
+            }[2m]))
+            /
+            sum(rate(http_requests_total{
+                namespace="{{args.namespace}}",
+                app_kubernetes_io_name="{{args.service}}"
+            }[2m]))
+    - name: p95-latency
+      interval: 30s
+      successCondition: result[0] <= 0.5
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(http_request_duration_seconds_bucket{
+                namespace="{{args.namespace}}",
+                app_kubernetes_io_name="{{args.service}}"
+              }[2m]))
+            )
+---
+# Source: auth-svc/templates/external-secret.yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: auth-svc-jwt
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: auth-svc-jwt
+    creationPolicy: Owner
+  data:
+    - secretKey: jwt_secret
+      remoteRef:
+        key: /devops/auth-svc/jwt-secret
+---
+# Source: auth-svc/templates/prometheusrule.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: auth-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: auth-svc.slo
+      interval: 30s
+      rules:
+        - alert: AuthSvcHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{namespace="default",status=~"5..",app_kubernetes_io_name="auth-svc"}[5m]))
+              /
+            sum(rate(http_requests_total{namespace="default",app_kubernetes_io_name="auth-svc"}[5m])) > 0.01
+          for: 5m
+          labels:
+            severity: critical
+            service: auth-svc
+            env: prod
+          annotations:
+            summary: "auth-svc 5xx > 1% for 5m"
+            description: "auth-svc in default is exceeding the 1% error budget"
+        - alert: AuthSvcHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(http_request_duration_seconds_bucket{namespace="default",app_kubernetes_io_name="auth-svc"}[5m]))
+            ) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+            service: auth-svc
+            env: prod
+          annotations:
+            summary: "auth-svc p95 latency > 500ms for 10m"
+---
+# Source: auth-svc/templates/rollout.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: auth-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+spec:
+  replicas: 2
+  strategy:
+    canary:
+      canaryService: auth-svc-canary
+      stableService: auth-svc
+      trafficRouting:
+        alb:
+          ingress: auth-svc
+          servicePort: 8080
+      maxSurge: 25%
+      maxUnavailable: 0
+      analysis:
+        templates:
+          - templateName: auth-svc-analysis
+        startingStep: 1
+        args:
+          - name: service
+            value: auth-svc
+          - name: namespace
+            value: default
+      steps:
+        - setWeight: 10
+        - pause:
+            duration: 2m
+        - setWeight: 25
+        - pause:
+            duration: 2m
+        - setWeight: 50
+        - pause:
+            duration: 5m
+        - setWeight: 100
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: auth-svc
+      app.kubernetes.io/instance: auth-svc
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: auth-svc
+        app.kubernetes.io/instance: auth-svc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: auth-svc
+      priorityClassName: "platform-critical"
+      terminationGracePeriodSeconds: 30
+      automountServiceAccountToken: true
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: auth-svc
+              app.kubernetes.io/instance: auth-svc
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: auth-svc
+              app.kubernetes.io/instance: auth-svc
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: topology.kubernetes.io/zone
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: auth-svc
+                    app.kubernetes.io/instance: auth-svc
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      containers:
+        - name: app
+          image: "REPLACE_ECR_REGISTRY/usf-devops/auth-svc:git-replaceme"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: LISTEN_ADDR
+              value: ":8080"
+            - name: DB_HOST
+              value: "REPLACE_RDS_ENDPOINT"
+            - name: DB_NAME
+              value: "prodops_prod"
+            - name: DB_USER
+              value: "app_prod"
+            - name: DB_IAM_AUTH
+              value: "true"
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: JWT_ISSUER
+              value: "auth-svc"
+            - name: JWT_TTL
+              value: "1h"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: auth-svc-jwt
+                  key: jwt_secret
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://tempo.observability.svc.cluster.local:4317"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            - name: OTEL_SERVICE_NAME
+              value: auth-svc
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=prod,service.version=git-replaceme"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+---
+# Source: auth-svc/templates/servicemonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: auth-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/name: auth-svc
+    app.kubernetes.io/instance: auth-svc
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: auth-svc-0.1.0
+    env: prod
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: auth-svc
+      app.kubernetes.io/instance: auth-svc
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
