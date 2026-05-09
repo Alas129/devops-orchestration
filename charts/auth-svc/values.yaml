@@ -2,6 +2,7 @@ env: dev                       # overridden per env
 image:
   repository: ""               # filled in from gitops overlay (ECR URI)
   tag: "git-replaceme"         # bumped by release bot
+  digest: ""                   # set alongside tag for digest-pinned deploys
   pullPolicy: IfNotPresent
 
 replicaCount: 2
@@ -17,6 +18,7 @@ ingress:
   pathPrefix: /api/v1/auth
   certificateArn: ""
   tlsHost: ""
+  wafAclArn: ""                # optional; attach a WAFv2 web ACL when set
 
 serviceAccount:
   create: true
@@ -30,10 +32,25 @@ resources:
   limits:
     memory: 256Mi               # NB: no CPU limit, avoid CFS throttling
 
+# Pod-level security context. Container-level overrides are applied on top
+# in the Rollout template.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
 probes:
+  startup:
+    enabled: true
+    path: /healthz
+    failureThreshold: 30
+    periodSeconds: 5            # 30 × 5s = 2.5min budget for slow starts (e.g. cold migration warmup)
   readiness:
     path: /healthz
-    initialDelaySeconds: 5
+    initialDelaySeconds: 0      # startupProbe handles cold start
     periodSeconds: 5
   liveness:
     path: /livez
@@ -45,10 +62,13 @@ hpa:
   min: 2
   max: 6
   cpuTarget: 70
+  memoryTarget: 75              # set to 0 to disable
 
 pdb:
   enabled: true
-  minAvailable: 1
+  # maxUnavailable=0 guarantees zero-downtime drains. The disruption is
+  # absorbed by maxSurge in the Rollout (canary brings up extra pods first).
+  maxUnavailable: 0
 
 # Argo Rollouts canary, with Prometheus-driven AnalysisTemplate.
 rollout:
@@ -65,6 +85,12 @@ rollout:
     successRateThreshold: "0.99"
     p95LatencyThreshold: "0.5"
 
+# Spread + anti-affinity (defence in depth on top of topologySpread)
+priorityClassName: ""           # set to e.g. "platform-critical" in prod overlay
+topologySpread:
+  enabled: true
+  maxSkew: 1
+
 config:
   jwtIssuer: auth-svc
   jwtTtl: 1h
@@ -73,6 +99,8 @@ config:
   dbHost: ""                   # rds endpoint, set per env
   useIamAuth: true
   awsRegion: us-east-1
+  # OpenTelemetry — set in env overlay to enable exporting traces to Tempo.
+  otelEndpoint: ""
 
 # JWT signing secret comes from SSM via ExternalSecret.
 externalSecret:
@@ -81,7 +109,9 @@ externalSecret:
 
 migration:
   enabled: true
-  image: migrate/migrate:v4.18.1
+  # Per-service migrate image built in CI (golang-migrate + SQL files baked in).
+  # Set this in the env overlay to e.g. <id>.dkr.ecr.<region>.amazonaws.com/usf-devops/auth-svc-migrate
+  image: ""
   ttlSecondsAfterFinished: 300
 
 monitoring:
