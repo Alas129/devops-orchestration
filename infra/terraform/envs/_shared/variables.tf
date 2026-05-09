@@ -27,3 +27,29 @@ variable "service_names" {
   type        = list(string)
   default     = ["frontend", "auth-svc", "tasks-svc", "notifier-svc", "migrate-runner"]
 }
+
+variable "ecr_replication_regions" {
+  description = "Regions to mirror ECR images into for DR (empty = no replication)."
+  type        = list(string)
+  default     = ["us-west-2"]
+}
+
+variable "enable_guardduty" {
+  type    = bool
+  default = true
+}
+
+variable "enable_security_hub" {
+  type    = bool
+  default = true
+}
+
+variable "enable_aws_config" {
+  type    = bool
+  default = true
+}
+
+variable "enable_cloudtrail" {
+  type    = bool
+  default = true
+}

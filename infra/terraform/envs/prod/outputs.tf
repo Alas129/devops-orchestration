@@ -45,3 +45,13 @@ output "grafana_url" {
 output "kubeconfig_command" {
   value = "aws eks update-kubeconfig --region ${var.region} --name ${module.eks.cluster_name}"
 }
+
+output "alb_logs_bucket" {
+  description = "S3 bucket receiving ALB access logs. Reference in Helm overlay annotation."
+  value       = module.alb_logs.bucket
+}
+
+output "secrets_kms_key_arn" {
+  description = "KMS CMK encrypting K8s secrets in etcd"
+  value       = module.eks.secrets_kms_key_arn
+}

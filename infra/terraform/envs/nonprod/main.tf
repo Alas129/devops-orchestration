@@ -45,9 +45,13 @@ module "rds" {
   allowed_security_group_ids = [module.eks.node_security_group_id]
   instance_class             = "db.t4g.small"
   multi_az                   = false
-  deletion_protection        = false
-  backup_retention_period    = 1
-  initial_database           = "postgres"
+  # Even nonprod gets deletion protection — cheap insurance against fat-finger
+  # `terraform destroy`. Override per-apply with `-var deletion_protection=false`
+  # on the rare occasion a clean rebuild is intended.
+  deletion_protection     = true
+  backup_retention_period = 7
+  monitoring_interval     = 0 # cost: skip enhanced monitoring in nonprod
+  initial_database        = "postgres"
 }
 
 # Per-env logical databases + IAM-auth roles.
@@ -60,7 +64,7 @@ resource "postgresql_role" "env" {
   login    = true
   password = "" # IAM auth — no password
   # The rds_iam role is created by RDS automatically when iam_database_authentication_enabled=true.
-  roles    = ["rds_iam"]
+  roles = ["rds_iam"]
 }
 
 resource "postgresql_database" "env" {
@@ -167,7 +171,7 @@ data "aws_iam_policy_document" "rds_connect" {
   for_each = local.service_roles
 
   statement {
-    effect = "Allow"
+    effect  = "Allow"
     actions = ["rds-db:connect"]
     resources = [
       "arn:aws:rds-db:${var.region}:${data.aws_caller_identity.current.account_id}:dbuser:${module.rds.resource_id}/app_${each.value.env}",
@@ -183,7 +187,7 @@ module "service_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.44"
 
-  role_name = "${local.cluster_name}-${each.key}"
+  role_name        = "${local.cluster_name}-${each.key}"
   role_policy_arns = {}
 
   oidc_providers = {

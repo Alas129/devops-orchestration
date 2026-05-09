@@ -25,8 +25,20 @@ module "eks" {
   vpc_id             = module.vpc.vpc_id
   private_subnet_ids = module.vpc.private_subnets
   intra_subnet_ids   = module.vpc.intra_subnets
-  # Tighten in real prod: only the office VPN egress IPs.
-  public_access_cidrs = ["0.0.0.0/0"]
+
+  # Public endpoint disabled by default in prod; CI assumes the role through a
+  # self-hosted runner inside the VPC (or set var.eks_public_access_cidrs to a
+  # narrow list of office/VPN egress IPs to reopen).
+  cluster_endpoint_public_access = var.eks_public_access_enabled
+  public_access_cidrs            = var.eks_public_access_cidrs
+  log_retention_days             = 365
+}
+
+# ── ALB access logs (referenced by Ingress annotations) ───────────────────
+module "alb_logs" {
+  source         = "../../modules/alb-logs"
+  bucket_name    = "${var.project}-alb-logs-prod-${data.aws_caller_identity.current.account_id}"
+  retention_days = 365
 }
 
 module "karpenter" {
@@ -36,7 +48,7 @@ module "karpenter" {
   cluster_version   = module.eks.cluster_version
   cluster_endpoint  = module.eks.cluster_endpoint
   oidc_provider_arn = module.eks.oidc_provider_arn
-  allow_spot        = false        # prod stays on-demand
+  allow_spot        = false # prod stays on-demand
   cpu_limit         = "400"
   memory_limit      = "800Gi"
 }
@@ -51,7 +63,8 @@ module "rds" {
   instance_class             = "db.t4g.medium"
   multi_az                   = true
   deletion_protection        = true
-  backup_retention_period    = 14
+  backup_retention_period    = 30
+  monitoring_interval        = 60
   initial_database           = "postgres"
 }
 
@@ -93,7 +106,7 @@ module "platform" {
   external_dns_domain_filters = [
     "prod.${local.domain_name}",
   ]
-  nats_replicas = 3                      # 3-replica JetStream cluster for prod
+  nats_replicas = 3 # 3-replica JetStream cluster for prod
 
   depends_on = [module.karpenter]
 }
@@ -169,7 +182,7 @@ resource "kubectl_manifest" "verify_signed_images" {
       failurePolicy           = "Fail"
       rules = [
         {
-          name  = "verify-cosign-keyless"
+          name = "verify-cosign-keyless"
           match = {
             any = [
               { resources = { kinds = ["Pod"], namespaces = ["prod"] } },
@@ -217,7 +230,7 @@ data "aws_iam_policy_document" "rds_connect_prod" {
   for_each = local.service_irsa_targets
 
   statement {
-    effect = "Allow"
+    effect  = "Allow"
     actions = ["rds-db:connect"]
     resources = [
       "arn:aws:rds-db:${var.region}:${data.aws_caller_identity.current.account_id}:dbuser:${module.rds.resource_id}/app_prod",
