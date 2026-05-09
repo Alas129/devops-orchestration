@@ -5,15 +5,23 @@ env: prod
 
 config:
   awsRegion: us-east-1
-  dbHost: REPLACE_RDS_ENDPOINT     # filled in once after `terraform apply` completes
+  dbHost: REPLACE_RDS_ENDPOINT     # filled from `terraform output rds_endpoint`
   dbName: prodops_prod
   dbUser: app_prod
   useIamAuth: true
   natsUrl: nats://nats.messaging.svc.cluster.local:4222
+  # OpenTelemetry exporter — Tempo runs in-cluster. Apps wire this in when
+  # the OTEL_EXPORTER_OTLP_ENDPOINT env var is non-empty.
+  otelEndpoint: http://tempo.observability.svc.cluster.local:4317
 
 ingress:
   className: alb
   certificateArn: REPLACE_PROD_ACM_ARN
+  accessLogsBucket: REPLACE_PROD_ALB_LOGS_BUCKET   # `terraform output alb_logs_bucket`
+  wafAclArn: ""                                     # set after creating WAFv2 ACL
+
+# Critical workloads in prod schedule before opportunistic ones.
+priorityClassName: platform-critical
 
 monitoring:
   serviceMonitor: { enabled: true, interval: 30s }
@@ -21,3 +29,6 @@ monitoring:
 
 networkPolicy:
   enabled: true
+
+pdb:
+  maxUnavailable: 0

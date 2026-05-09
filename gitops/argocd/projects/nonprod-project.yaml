@@ -1,0 +1,56 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: nonprod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "Nonprod cluster — dev / qa / uat namespaces share the cluster but are isolated as separate destinations."
+  sourceRepos:
+    - "https://github.com/alusigmi/devops-orchestration.git"
+
+  destinations:
+    - namespace: dev
+      server: https://kubernetes.default.svc
+    - namespace: qa
+      server: https://kubernetes.default.svc
+    - namespace: uat
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: "*"
+    - group: apps
+      kind: "*"
+    - group: batch
+      kind: "*"
+    - group: networking.k8s.io
+      kind: "*"
+    - group: policy
+      kind: "*"
+    - group: autoscaling
+      kind: "*"
+    - group: argoproj.io
+      kind: "*"
+    - group: monitoring.coreos.com
+      kind: "*"
+    - group: external-secrets.io
+      kind: "*"
+
+  orphanedResources:
+    warn: true
+
+  roles:
+    - name: developer
+      description: "Developers can sync any nonprod app"
+      policies:
+        - p, proj:nonprod:developer, applications, *, nonprod/*, allow
+      groups:
+        - alusigmi:developers

@@ -17,8 +17,13 @@ spec:
     metadata:
       name: 'prod-{{ .name }}'
       labels: { env: prod }
+      # Trigger Slack/email notifications via argocd-notifications subscriptions.
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: devops-alerts
+        notifications.argoproj.io/subscribe.on-sync-status-unknown.slack: devops-alerts
+        notifications.argoproj.io/subscribe.on-health-degraded.slack: devops-alerts
     spec:
-      project: default
+      project: prod
       sources:
         - repoURL: https://github.com/alusigmi/devops-orchestration.git
           targetRevision: main
@@ -35,8 +40,22 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: prod
+      revisionHistoryLimit: 20
       syncPolicy:
-        # NB: prod requires self-heal=true to keep drift minimal but auto-prune
-        # is set to true; canary auto-rolls back via Argo Rollouts AnalysisTemplate.
-        automated: { prune: true, selfHeal: true }
-        syncOptions: [CreateNamespace=true, ServerSideApply=true, PruneLast=true]
+        # Prod prune=true but selfHeal=false: drift is alerted, not silently
+        # corrected. An on-call operator decides whether the manual change was
+        # legitimate before re-syncing.
+        automated:
+          prune: true
+          selfHeal: false
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          - PruneLast=true
+          - RespectIgnoreDifferences=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m

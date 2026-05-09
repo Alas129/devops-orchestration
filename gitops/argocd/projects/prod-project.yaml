@@ -1,0 +1,84 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "Prod cluster — application workloads only. Cluster-scoped resources are off-limits."
+  sourceRepos:
+    - "https://github.com/alusigmi/devops-orchestration.git"
+
+  destinations:
+    - namespace: prod
+      server: https://kubernetes.default.svc
+
+  # Whitelist only the cluster-scoped kinds Helm needs (CRDs and Namespaces).
+  # Everything else (ClusterRole, ValidatingWebhookConfig, etc.) must come
+  # from platform Terraform, not application sync.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: "*"
+    - group: apps
+      kind: "*"
+    - group: batch
+      kind: "*"
+    - group: networking.k8s.io
+      kind: "*"
+    - group: policy
+      kind: "*"
+    - group: autoscaling
+      kind: "*"
+    - group: argoproj.io
+      kind: "*"
+    - group: monitoring.coreos.com
+      kind: "*"
+    - group: external-secrets.io
+      kind: "*"
+
+  # Block deploys outside the global change window (UTC). Adjust the cron
+  # to your team's hours; emergency change goes through `argocd app sync
+  # --override-window` (audited).
+  syncWindows:
+    - kind: deny
+      schedule: "0 0 * * 0,6"
+      duration: 24h
+      applications:
+        - "prod-*"
+      manualSync: true       # operators can still force-sync if approved
+      timeZone: Etc/UTC
+    - kind: allow
+      schedule: "0 13 * * 1-5"
+      duration: 8h
+      applications:
+        - "prod-*"
+      manualSync: true
+      timeZone: Etc/UTC
+
+  orphanedResources:
+    warn: true
+
+  roles:
+    # Read-only role: developers see prod state but cannot mutate.
+    - name: developer-readonly
+      description: "Read-only access for developers"
+      policies:
+        - p, proj:prod:developer-readonly, applications, get, prod/*, allow
+        - p, proj:prod:developer-readonly, applications, sync, prod/*, deny
+      groups:
+        - alusigmi:developers
+    # Operator role: full sync/rollback.
+    - name: operator
+      description: "Full operate access for SRE on call"
+      policies:
+        - p, proj:prod:operator, applications, *, prod/*, allow
+        - p, proj:prod:operator, exec, create, prod/*, deny
+      groups:
+        - alusigmi:sre

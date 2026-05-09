@@ -1,0 +1,73 @@
+# ArgoCD Notifications config. Apply alongside the argo-cd Helm release.
+# The Slack webhook URL must be created out-of-band (see RUNBOOK §6) and
+# stored in SSM at /devops/argocd/slack_webhook_url; the corresponding
+# ExternalSecret puts it into the `argocd-notifications-secret` k8s Secret.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  service.slack: |
+    token: $slack-token
+
+  template.app-sync-failed: |
+    message: |
+      :red_circle: *{{.app.metadata.name}}* sync to *{{.app.spec.destination.namespace}}* FAILED.
+      Revision: {{.app.status.sync.revision | trunc 7}}
+      Error: {{.app.status.operationState.message}}
+      <https://argocd.{{.context.argocdUrl}}/applications/{{.app.metadata.name}}|view in ArgoCD>
+
+  template.app-sync-status-unknown: |
+    message: |
+      :warning: *{{.app.metadata.name}}* status is UNKNOWN — check ArgoCD.
+
+  template.app-health-degraded: |
+    message: |
+      :rotating_light: *{{.app.metadata.name}}* health DEGRADED.
+      Last sync: {{.app.status.sync.revision | trunc 7}}
+      <https://argocd.{{.context.argocdUrl}}/applications/{{.app.metadata.name}}|investigate>
+
+  trigger.on-sync-failed: |
+    - description: Application sync failed
+      send: [app-sync-failed]
+      when: app.status.operationState.phase in ['Error', 'Failed']
+
+  trigger.on-sync-status-unknown: |
+    - description: Application sync status is unknown
+      send: [app-sync-status-unknown]
+      when: app.status.sync.status == 'Unknown'
+
+  trigger.on-health-degraded: |
+    - description: Application has degraded
+      send: [app-health-degraded]
+      when: app.status.health.status == 'Degraded'
+
+  subscriptions: |
+    - recipients:
+        - slack:devops-alerts
+      triggers:
+        - on-sync-failed
+        - on-health-degraded
+---
+# The actual Slack token is loaded by ExternalSecret from
+# SSM /devops/argocd/slack_webhook_url. Argo Notifications expects key
+# `slack-token` for the Bot OAuth token (or the legacy webhook URL).
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: argocd-notifications-secret
+  namespace: argocd
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: argocd-notifications-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: slack-token
+      remoteRef:
+        key: /devops/argocd/slack_webhook_url

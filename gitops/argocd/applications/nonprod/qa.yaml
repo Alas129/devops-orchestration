@@ -17,8 +17,10 @@ spec:
     metadata:
       name: 'qa-{{ .name }}'
       labels: { env: qa }
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: devops-alerts
     spec:
-      project: default
+      project: nonprod
       sources:
         - repoURL: https://github.com/alusigmi/devops-orchestration.git
           targetRevision: main
@@ -35,6 +37,10 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: qa
+      revisionHistoryLimit: 10
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true, ServerSideApply=true, PruneLast=true]
+        retry:
+          limit: 5
+          backoff: { duration: 30s, factor: 2, maxDuration: 5m }

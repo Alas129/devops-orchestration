@@ -17,8 +17,11 @@ spec:
     metadata:
       name: 'uat-{{ .name }}'
       labels: { env: uat }
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: devops-alerts
+        notifications.argoproj.io/subscribe.on-health-degraded.slack: devops-alerts
     spec:
-      project: default
+      project: nonprod
       sources:
         - repoURL: https://github.com/alusigmi/devops-orchestration.git
           targetRevision: main
@@ -35,6 +38,10 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: uat
+      revisionHistoryLimit: 15
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true, ServerSideApply=true, PruneLast=true]
+        retry:
+          limit: 5
+          backoff: { duration: 30s, factor: 2, maxDuration: 5m }
