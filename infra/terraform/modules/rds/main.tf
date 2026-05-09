@@ -48,16 +48,60 @@ resource "aws_db_parameter_group" "pg16" {
     value = "500" # ms
   }
 
-  # Required for pg_repack and online schema tooling.
+  # pg_stat_statements for query analysis; pgaudit for compliance-grade
+  # session/object auditing. apply_method=pending-reboot because changing
+  # shared_preload_libraries requires a restart.
   parameter {
-    name  = "shared_preload_libraries"
-    value = "pg_stat_statements"
+    name         = "shared_preload_libraries"
+    value        = "pg_stat_statements,pgaudit"
+    apply_method = "pending-reboot"
+  }
+
+  parameter {
+    name  = "pgaudit.log"
+    value = "ddl,role,write"
+  }
+
+  parameter {
+    name  = "pgaudit.log_catalog"
+    value = "off"
+  }
+
+  parameter {
+    name  = "log_connections"
+    value = "1"
+  }
+
+  parameter {
+    name  = "log_disconnections"
+    value = "1"
   }
 
   parameter {
     name  = "rds.force_ssl"
     value = "1"
   }
+}
+
+# Enhanced Monitoring IAM role — RDS writes per-second OS metrics into CW.
+resource "aws_iam_role" "rds_monitoring" {
+  count = var.monitoring_interval > 0 ? 1 : 0
+  name  = "${var.identifier}-rds-monitoring"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "monitoring.rds.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "rds_monitoring" {
+  count      = var.monitoring_interval > 0 ? 1 : 0
+  role       = aws_iam_role.rds_monitoring[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 
 resource "random_password" "master" {
@@ -98,9 +142,9 @@ resource "aws_db_instance" "this" {
   username = var.master_username
   password = random_password.master.result
 
-  db_name              = var.initial_database
-  parameter_group_name = aws_db_parameter_group.pg16.name
-  db_subnet_group_name = aws_db_subnet_group.this.name
+  db_name                = var.initial_database
+  parameter_group_name   = aws_db_parameter_group.pg16.name
+  db_subnet_group_name   = aws_db_subnet_group.this.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
   multi_az                            = var.multi_az
@@ -118,10 +162,15 @@ resource "aws_db_instance" "this" {
   performance_insights_enabled    = true
   performance_insights_kms_key_id = aws_kms_key.rds.arn
 
+  monitoring_interval = var.monitoring_interval
+  monitoring_role_arn = var.monitoring_interval > 0 ? aws_iam_role.rds_monitoring[0].arn : null
+
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
-  apply_immediately = false
-  skip_final_snapshot = !var.deletion_protection
+  auto_minor_version_upgrade = true
+
+  apply_immediately         = false
+  skip_final_snapshot       = !var.deletion_protection
   final_snapshot_identifier = var.deletion_protection ? "${var.identifier}-final-${formatdate("YYYYMMDDhhmmss", timestamp())}" : null
 
   lifecycle {

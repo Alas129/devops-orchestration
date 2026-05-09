@@ -44,13 +44,21 @@ variable "multi_az" {
 }
 
 variable "deletion_protection" {
-  type    = bool
-  default = false
+  type        = bool
+  default     = true
+  description = "Block accidental deletion. Override to false only in throwaway envs."
 }
 
 variable "backup_retention_period" {
-  type    = number
-  default = 7
+  type        = number
+  default     = 14
+  description = "PITR retention in days. Compliance baselines often want 30+."
+}
+
+variable "monitoring_interval" {
+  type        = number
+  default     = 60
+  description = "Enhanced Monitoring sample period (seconds). Set to 0 to disable."
 }
 
 variable "master_username" {
