@@ -1,0 +1,25 @@
+name: CI · notifier-svc
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/notifier-svc/**'
+      - 'charts/notifier-svc/**'
+      - '.github/workflows/_reusable-ci-go-svc.yaml'
+      - '.github/workflows/ci-notifier-svc.yaml'
+  pull_request:
+    paths:
+      - 'apps/notifier-svc/**'
+      - 'charts/notifier-svc/**'
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/_reusable-ci-go-svc.yaml
+    with:
+      service: notifier-svc
+      ecr_registry: ${{ vars.ECR_REGISTRY }}
+    secrets:
+      AWS_ROLE_ECR_PUSH: ${{ secrets.AWS_ROLE_ECR_PUSH }}
+      GITOPS_BOT_TOKEN: ${{ secrets.GITOPS_BOT_TOKEN }}

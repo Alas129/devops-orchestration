@@ -1,0 +1,204 @@
+name: _reusable CI for a Go microservice
+
+# Reusable: builds, tests, scans, signs, and pushes both the service image
+# and its sibling migrate-runner image to ECR. Caller workflows only specify
+# the service short name; everything else is identical across services.
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        type: string
+        required: true
+        description: "Short service name (e.g. 'auth-svc')"
+      ecr_registry:
+        type: string
+        required: true
+        description: "Account-scoped ECR registry, e.g. <id>.dkr.ecr.us-east-1.amazonaws.com"
+    secrets:
+      AWS_ROLE_ECR_PUSH:
+        required: true
+      GITOPS_BOT_TOKEN:
+        required: false
+
+permissions:
+  id-token: write
+  contents: write
+  security-events: write   # upload SARIF to code-scanning
+  pull-requests: read
+
+jobs:
+  build:
+    name: build & push
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+      image_digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute image tag
+        id: meta
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=git-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+          cache-dependency-path: apps/${{ inputs.service }}/go.sum
+
+      - name: go mod download & vet
+        working-directory: apps/${{ inputs.service }}
+        run: |
+          go mod download
+          go vet ./...
+
+      # ── Static analysis (SAST) ─────────────────────────────────────────────
+      - name: gosec
+        uses: securego/gosec@v2.21.4
+        with:
+          args: '-no-fail -fmt=sarif -out=gosec-${{ inputs.service }}.sarif ./apps/${{ inputs.service }}/...'
+
+      - name: Upload gosec SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gosec-${{ inputs.service }}.sarif
+          category: gosec-${{ inputs.service }}
+
+      - name: govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: '1.22'
+          work-dir: apps/${{ inputs.service }}
+
+      # ── Tests ──────────────────────────────────────────────────────────────
+      - name: Unit tests
+        working-directory: apps/${{ inputs.service }}
+        run: go test ./... -race -count=1 -timeout 120s -coverprofile=coverage.out
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ inputs.service }}-${{ github.sha }}
+          path: apps/${{ inputs.service }}/coverage.out
+          retention-days: 7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ECR_PUSH }}
+          aws-region: us-east-1
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      # ── Service image ──────────────────────────────────────────────────────
+      - name: Build & push service image
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/${{ inputs.service }}
+          file: apps/${{ inputs.service }}/Dockerfile
+          push: true
+          provenance: true
+          sbom: true
+          tags: ${{ inputs.ecr_registry }}/usf-devops/${{ inputs.service }}:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=${{ inputs.service }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.service }}
+
+      # ── Migrate-runner image (if Dockerfile.migrate exists) ────────────────
+      - name: Build & push migrate-runner image
+        if: hashFiles(format('apps/{0}/Dockerfile.migrate', inputs.service)) != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/${{ inputs.service }}
+          file: apps/${{ inputs.service }}/Dockerfile.migrate
+          push: true
+          provenance: true
+          sbom: true
+          tags: ${{ inputs.ecr_registry }}/usf-devops/${{ inputs.service }}-migrate:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=${{ inputs.service }}-migrate
+          cache-to: type=gha,mode=max,scope=${{ inputs.service }}-migrate
+
+      # ── Vulnerability scan (image) ─────────────────────────────────────────
+      - name: Trivy scan (blocking)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ inputs.ecr_registry }}/usf-devops/${{ inputs.service }}:${{ steps.meta.outputs.tag }}
+          format: sarif
+          output: trivy-${{ inputs.service }}.sarif
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-${{ inputs.service }}.sarif
+          category: trivy-${{ inputs.service }}
+
+      # ── Cosign keyless sign + SBOM attestation ─────────────────────────────
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign service image (by digest)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+          IMG: ${{ inputs.ecr_registry }}/usf-devops/${{ inputs.service }}@${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "$IMG"
+
+      - name: Generate SBOM (syft)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ inputs.ecr_registry }}/usf-devops/${{ inputs.service }}@${{ steps.push.outputs.digest }}
+          format: cyclonedx-json
+          output-file: sbom-${{ inputs.service }}.cdx.json
+
+      - name: Attest SBOM with cosign
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+          IMG: ${{ inputs.ecr_registry }}/usf-devops/${{ inputs.service }}@${{ steps.push.outputs.digest }}
+        run: |
+          cosign attest --yes --predicate sbom-${{ inputs.service }}.cdx.json \
+            --type cyclonedx "$IMG"
+
+      # ── Bump dev overlay (only on push to main); pin by digest ─────────────
+      - name: Bump dev overlay
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITOPS_BOT_TOKEN: ${{ secrets.GITOPS_BOT_TOKEN }}
+          SERVICE: ${{ inputs.service }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -e
+          if [ -z "${GITOPS_BOT_TOKEN:-}" ]; then
+            echo "GITOPS_BOT_TOKEN not set — skipping overlay bump"
+            exit 0
+          fi
+          git config user.name "gitops-bot"
+          git config user.email "gitops-bot@users.noreply.github.com"
+          python3 - <<PY
+          import yaml, os
+          path = f"gitops/overlays/dev/{os.environ['SERVICE']}.yaml"
+          with open(path) as f: data = yaml.safe_load(f) or {}
+          img = data.setdefault("image", {})
+          img["tag"] = os.environ["TAG"]
+          img["digest"] = os.environ["DIGEST"]
+          with open(path, "w") as f: yaml.safe_dump(data, f, sort_keys=False, default_flow_style=False)
+          PY
+          git add gitops/overlays/dev/${SERVICE}.yaml
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(dev): bump ${SERVICE} to ${TAG} (${DIGEST}) [skip ci]"
+            git push https://x-access-token:${GITOPS_BOT_TOKEN}@github.com/${{ github.repository }}.git HEAD:main
+          fi

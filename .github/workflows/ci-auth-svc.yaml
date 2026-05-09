@@ -1,0 +1,25 @@
+name: CI · auth-svc
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/auth-svc/**'
+      - 'charts/auth-svc/**'
+      - '.github/workflows/_reusable-ci-go-svc.yaml'
+      - '.github/workflows/ci-auth-svc.yaml'
+  pull_request:
+    paths:
+      - 'apps/auth-svc/**'
+      - 'charts/auth-svc/**'
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/_reusable-ci-go-svc.yaml
+    with:
+      service: auth-svc
+      ecr_registry: ${{ vars.ECR_REGISTRY }}
+    secrets:
+      AWS_ROLE_ECR_PUSH: ${{ secrets.AWS_ROLE_ECR_PUSH }}
+      GITOPS_BOT_TOKEN: ${{ secrets.GITOPS_BOT_TOKEN }}

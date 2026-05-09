@@ -1,0 +1,23 @@
+name: release-please
+
+# Watches main for Conventional Commits, accumulates a "Release PR" with the
+# next SemVer bump per service. Merging that PR creates a tag (vX.Y.Z or
+# vX.Y.Z-rc.N) which kicks off promote-uat / promote-prod.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

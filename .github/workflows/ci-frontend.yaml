@@ -1,0 +1,146 @@
+name: CI · frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/frontend/**'
+      - 'charts/frontend/**'
+      - '.github/workflows/ci-frontend.yaml'
+  pull_request:
+    paths:
+      - 'apps/frontend/**'
+      - 'charts/frontend/**'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: write
+  security-events: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+      image_digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Compute tag
+        id: meta
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=git-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Install
+        working-directory: apps/frontend
+        run: npm ci || npm install
+
+      - name: npm audit (HIGH/CRITICAL)
+        working-directory: apps/frontend
+        run: npm audit --audit-level=high
+
+      - name: Lint
+        working-directory: apps/frontend
+        run: npm run lint --if-present
+
+      - name: Build
+        working-directory: apps/frontend
+        run: npm run build
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ECR_PUSH }}
+          aws-region: us-east-1
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push image
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/frontend
+          push: true
+          provenance: true
+          sbom: true
+          tags: ${{ vars.ECR_REGISTRY }}/usf-devops/frontend:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Trivy scan (blocking)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ vars.ECR_REGISTRY }}/usf-devops/frontend:${{ steps.meta.outputs.tag }}
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-frontend
+
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign (by digest)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+          IMG: ${{ vars.ECR_REGISTRY }}/usf-devops/frontend@${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "$IMG"
+
+      - name: Generate SBOM (syft)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ vars.ECR_REGISTRY }}/usf-devops/frontend@${{ steps.push.outputs.digest }}
+          format: cyclonedx-json
+          output-file: sbom-frontend.cdx.json
+
+      - name: Attest SBOM
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+          IMG: ${{ vars.ECR_REGISTRY }}/usf-devops/frontend@${{ steps.push.outputs.digest }}
+        run: |
+          cosign attest --yes --predicate sbom-frontend.cdx.json --type cyclonedx "$IMG"
+
+      - name: Bump dev overlay (with digest)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITOPS_BOT_TOKEN: ${{ secrets.GITOPS_BOT_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -e
+          if [ -z "${GITOPS_BOT_TOKEN:-}" ]; then
+            echo "GITOPS_BOT_TOKEN not set — skipping overlay bump"; exit 0
+          fi
+          git config user.name "gitops-bot"
+          git config user.email "gitops-bot@users.noreply.github.com"
+          python3 - <<PY
+          import yaml, os
+          p = "gitops/overlays/dev/frontend.yaml"
+          with open(p) as f: d = yaml.safe_load(f) or {}
+          img = d.setdefault("image", {})
+          img["tag"] = os.environ["TAG"]
+          img["digest"] = os.environ["DIGEST"]
+          with open(p, "w") as f: yaml.safe_dump(d, f, sort_keys=False, default_flow_style=False)
+          PY
+          git add gitops/overlays/dev/frontend.yaml
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(dev): bump frontend to ${TAG} (${DIGEST}) [skip ci]"
+            git push https://x-access-token:${GITOPS_BOT_TOKEN}@github.com/${{ github.repository }}.git HEAD:main
+          fi

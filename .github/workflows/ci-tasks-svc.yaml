@@ -1,0 +1,25 @@
+name: CI · tasks-svc
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/tasks-svc/**'
+      - 'charts/tasks-svc/**'
+      - '.github/workflows/_reusable-ci-go-svc.yaml'
+      - '.github/workflows/ci-tasks-svc.yaml'
+  pull_request:
+    paths:
+      - 'apps/tasks-svc/**'
+      - 'charts/tasks-svc/**'
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/_reusable-ci-go-svc.yaml
+    with:
+      service: tasks-svc
+      ecr_registry: ${{ vars.ECR_REGISTRY }}
+    secrets:
+      AWS_ROLE_ECR_PUSH: ${{ secrets.AWS_ROLE_ECR_PUSH }}
+      GITOPS_BOT_TOKEN: ${{ secrets.GITOPS_BOT_TOKEN }}

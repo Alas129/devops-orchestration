@@ -1,0 +1,76 @@
+name: promote → PROD
+
+# Triggered by release-please cutting a stable tag (e.g. v1.2.0). Only fires
+# for non-prerelease tags. Verifies cosign signatures of every service image
+# at that tag, then bumps gitops/overlays/prod/*.yaml. ArgoCD on the prod
+# cluster runs PreSync migrations and a canary.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  id-token: write    # required for cosign keyless verify
+  contents: write
+
+jobs:
+  verify:
+    name: cosign verify
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    environment: prod-promote
+    steps:
+      - uses: sigstore/cosign-installer@v3
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ECR_PUSH }}
+          aws-region: us-east-1
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Verify each service image is signed
+        env:
+          REGISTRY: ${{ vars.ECR_REGISTRY }}
+          TAG: ${{ github.ref_name }}
+          OIDC_ISSUER: https://token.actions.githubusercontent.com
+          IDENTITY_REGEX: ^https://github.com/${{ github.repository }}/.+$
+        run: |
+          set -e
+          for svc in frontend auth-svc tasks-svc notifier-svc; do
+            echo "→ verifying $svc:$TAG"
+            cosign verify \
+              --certificate-oidc-issuer "$OIDC_ISSUER" \
+              --certificate-identity-regexp "$IDENTITY_REGEX" \
+              "$REGISTRY/usf-devops/$svc:$TAG"
+          done
+
+  bump:
+    name: bump prod overlay
+    needs: verify
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITOPS_BOT_TOKEN }}
+
+      - name: Bump PROD overlay
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -e
+          git config user.name "gitops-bot"
+          git config user.email "gitops-bot@users.noreply.github.com"
+          python3 - <<PY
+          import yaml, os
+          tag = os.environ["TAG"]
+          for svc in ("frontend", "auth-svc", "tasks-svc", "notifier-svc"):
+              p = f"gitops/overlays/prod/{svc}.yaml"
+              with open(p) as f: d = yaml.safe_load(f) or {}
+              d.setdefault("image", {})["tag"] = tag
+              with open(p, "w") as f: yaml.safe_dump(d, f, sort_keys=False, default_flow_style=False)
+          PY
+          git add gitops/overlays/prod/*.yaml
+          git commit -m "chore(prod): promote to $TAG"
+          git push origin main

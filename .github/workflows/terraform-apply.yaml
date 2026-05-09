@@ -1,0 +1,64 @@
+name: Terraform · apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/terraform/**'
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Env to apply"
+        required: true
+        type: choice
+        options: [_shared, nonprod, prod]
+
+permissions:
+  id-token: write
+  contents: read
+
+# Each environment in repo Settings → Environments must be configured with
+# required reviewers (especially `prod`). The `environment:` key below makes
+# the apply step block until a reviewer approves in the Actions UI.
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        env: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.env)) || fromJSON('["_shared","nonprod","prod"]') }}
+    environment: ${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TF_APPLY }}
+          aws-region: us-east-1
+
+      - name: terraform init
+        working-directory: infra/terraform/envs/${{ matrix.env }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=us-east-1" \
+            -backend-config="dynamodb_table=usf-devops-tflock"
+
+      - name: terraform plan (apply gate)
+        id: plan
+        working-directory: infra/terraform/envs/${{ matrix.env }}
+        env:
+          TF_VAR_state_bucket: ${{ vars.TF_STATE_BUCKET }}
+          TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+          TF_VAR_repository: ${{ github.repository }}
+        run: terraform plan -no-color -out=plan.bin
+
+      - name: terraform apply (from saved plan)
+        working-directory: infra/terraform/envs/${{ matrix.env }}
+        run: terraform apply -no-color -input=false plan.bin

@@ -1,0 +1,44 @@
+name: Nightly · promote dev → qa
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 00:00 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  smoke-and-promote:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITOPS_BOT_TOKEN }}
+
+      # In a real setup we'd run integration / k6 smoke against dev here.
+      # For this scaffold we trust per-service CI tests + Argo Rollouts'
+      # Prometheus analysis to gate; the nightly is just a scheduled promotion.
+      - name: Copy dev tags into qa overlay
+        run: |
+          set -e
+          git config user.name "gitops-bot"
+          git config user.email "gitops-bot@users.noreply.github.com"
+          python3 - <<PY
+          import yaml
+          for svc in ("frontend", "auth-svc", "tasks-svc", "notifier-svc"):
+              with open(f"gitops/overlays/dev/{svc}.yaml") as f: dev = yaml.safe_load(f) or {}
+              with open(f"gitops/overlays/qa/{svc}.yaml") as f: qa = yaml.safe_load(f) or {}
+              tag = dev.get("image", {}).get("tag")
+              if tag and tag != "git-replaceme":
+                  qa.setdefault("image", {})["tag"] = tag
+                  with open(f"gitops/overlays/qa/{svc}.yaml", "w") as f:
+                      yaml.safe_dump(qa, f, sort_keys=False, default_flow_style=False)
+          PY
+          git add gitops/overlays/qa/*.yaml
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(qa): nightly promote from dev"
+            git push origin main
+          fi

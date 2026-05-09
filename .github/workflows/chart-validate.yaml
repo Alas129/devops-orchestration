@@ -1,0 +1,104 @@
+name: Helm chart validate
+
+on:
+  pull_request:
+    paths:
+      - 'charts/**'
+      - 'gitops/overlays/**'
+      - '.github/workflows/chart-validate.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'charts/**'
+      - 'gitops/overlays/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        chart: [auth-svc, tasks-svc, notifier-svc, frontend]
+        env:   [dev, qa, uat, prod]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.4
+
+      - name: helm dependency update
+        run: |
+          if [ -f charts/${{ matrix.chart }}/Chart.lock ]; then
+            helm dependency update charts/${{ matrix.chart }}
+          fi
+
+      - name: helm lint
+        run: helm lint --strict charts/${{ matrix.chart }}
+
+      - name: helm template (env overlay)
+        id: render
+        run: |
+          mkdir -p .render
+          helm template ${{ matrix.chart }} charts/${{ matrix.chart }} \
+            -f gitops/overlays/${{ matrix.env }}/_common.yaml \
+            -f gitops/overlays/${{ matrix.env }}/${{ matrix.chart }}.yaml \
+            > .render/${{ matrix.chart }}-${{ matrix.env }}.yaml
+
+      - name: kubeconform (strict, k8s 1.30)
+        uses: docker://ghcr.io/yannh/kubeconform:v0.6.7
+        with:
+          args: >-
+            -strict
+            -summary
+            -kubernetes-version 1.30.0
+            -schema-location default
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+            .render/${{ matrix.chart }}-${{ matrix.env }}.yaml
+
+      - name: kube-score
+        uses: docker://zegl/kube-score:v1.18.0
+        continue-on-error: true   # advisory; kubeconform is the gate
+        with:
+          args: score .render/${{ matrix.chart }}-${{ matrix.env }}.yaml
+
+      - name: Upload rendered manifests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-${{ matrix.chart }}-${{ matrix.env }}-${{ github.sha }}
+          path: .render/${{ matrix.chart }}-${{ matrix.env }}.yaml
+          retention-days: 7
+
+  policy:
+    name: OPA Conftest (security policies)
+    runs-on: ubuntu-22.04
+    needs: validate
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with: { version: v3.15.4 }
+
+      - name: Render all charts/envs
+        run: |
+          mkdir -p .render
+          for c in auth-svc tasks-svc notifier-svc frontend; do
+            for e in dev qa uat prod; do
+              helm template "$c" "charts/$c" \
+                -f "gitops/overlays/$e/_common.yaml" \
+                -f "gitops/overlays/$e/$c.yaml" \
+                > ".render/$c-$e.yaml"
+            done
+          done
+
+      - name: Run conftest against rendered manifests
+        uses: instrumenta/conftest-action@master
+        with:
+          files: .render
+          policy: tools/policy

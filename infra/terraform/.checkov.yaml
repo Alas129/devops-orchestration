@@ -1,0 +1,16 @@
+# Checkov skip list — record *why* each is skipped so reviewers can challenge.
+#
+# CKV_AWS_158: KMS key rotation — we will enable in Batch D (issue #TBD).
+# CKV_AWS_338: CloudWatch log group retention < 1y — set to 90d intentionally
+#              for cost; logs >90d archive to S3 via subscription.
+
+skip-check:
+  - CKV_AWS_158
+  - CKV_AWS_338
+
+framework:
+  - terraform
+
+soft-fail-on:
+  # Informational only; surface in PR comment but don't block.
+  - CKV2_AWS_5     # SG attached to a resource — Terraform manages explicitly.
