@@ -1,0 +1,85 @@
+version: 2
+
+updates:
+  # GitHub Actions versions across all workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    groups:
+      gha-minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies, ci]
+
+  # Go modules — one entry per service so PRs are scoped.
+  - package-ecosystem: gomod
+    directory: /apps/auth-svc
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
+    open-pull-requests-limit: 5
+    groups:
+      go-minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies, go, auth-svc]
+
+  - package-ecosystem: gomod
+    directory: /apps/tasks-svc
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
+    open-pull-requests-limit: 5
+    groups:
+      go-minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies, go, tasks-svc]
+
+  - package-ecosystem: gomod
+    directory: /apps/notifier-svc
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
+    open-pull-requests-limit: 5
+    groups:
+      go-minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies, go, notifier-svc]
+
+  # Frontend (npm)
+  - package-ecosystem: npm
+    directory: /apps/frontend
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies, frontend]
+
+  # Docker base images — per service Dockerfile
+  - package-ecosystem: docker
+    directory: /apps/auth-svc
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
+    labels: [dependencies, docker, auth-svc]
+
+  - package-ecosystem: docker
+    directory: /apps/tasks-svc
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
+    labels: [dependencies, docker, tasks-svc]
+
+  - package-ecosystem: docker
+    directory: /apps/notifier-svc
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
+    labels: [dependencies, docker, notifier-svc]
+
+  - package-ecosystem: docker
+    directory: /apps/frontend
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
+    labels: [dependencies, docker, frontend]
+
+  # Terraform providers (root + every module + every env)
+  - package-ecosystem: terraform
+    directory: /infra/terraform
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
+    open-pull-requests-limit: 10
+    groups:
+      tf-minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies, terraform]

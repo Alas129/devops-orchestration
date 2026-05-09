@@ -1,0 +1,58 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+output:
+  formats:
+    - format: colored-line-number
+  sort-results: true
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - errorlint
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosimple
+    - revive
+    - gosec
+    - misspell
+    - unconvert
+    - bodyclose
+    - rowserrcheck
+    - sqlclosecheck
+    - nilerr
+    - noctx
+    - prealloc
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  gosec:
+    excludes:
+      - G104   # already covered by errcheck
+  revive:
+    rules:
+      - name: var-naming
+      - name: exported
+        disabled: true
+      - name: package-comments
+        disabled: true
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters: [errcheck, gosec, bodyclose, noctx]
+    - path: cmd/
+      linters: [gosec]   # main.go often has unchecked log writes
+  max-same-issues: 0
+  new-from-rev: ""

@@ -1,0 +1,36 @@
+# CODEOWNERS — auto-assigns reviewers on PRs.
+# Order matters: later patterns override earlier ones.
+# Replace placeholder team handles (e.g. @usf/devops-platform) with real GitHub teams
+# once they exist; until then individual maintainers can be listed instead.
+
+# Default owners for everything in the repo.
+*                                   @usf/devops-platform
+
+# Infrastructure
+/infra/terraform/                   @usf/devops-platform @usf/sre
+/infra/terraform/envs/prod/         @usf/sre
+
+# CI / CD
+/.github/                           @usf/devops-platform
+/.github/workflows/terraform-*.yaml @usf/sre
+/.github/workflows/promote-prod.*   @usf/sre
+
+# GitOps
+/gitops/                            @usf/devops-platform
+/gitops/overlays/prod/              @usf/sre
+/gitops/argocd/applications/prod/   @usf/sre
+
+# Helm charts
+/charts/                            @usf/devops-platform
+
+# Application code
+/apps/auth-svc/                     @usf/backend
+/apps/tasks-svc/                    @usf/backend
+/apps/notifier-svc/                 @usf/backend
+/apps/frontend/                     @usf/frontend
+
+# Security-sensitive files
+/charts/**/networkpolicy.yaml       @usf/devops-platform @usf/security
+/charts/**/external-secret.yaml     @usf/devops-platform @usf/security
+/infra/terraform/modules/github-oidc/ @usf/sre @usf/security
+SECURITY.md                         @usf/security
