@@ -36,9 +36,11 @@ resource "aws_securityhub_account" "this" {
 }
 
 resource "aws_securityhub_standards_subscription" "cis" {
-  count         = var.enable_security_hub ? 1 : 0
-  depends_on    = [aws_securityhub_account.this]
-  standards_arn = "arn:aws:securityhub:::ruleset/cis-aws-foundations-benchmark/v/1.4.0"
+  count      = var.enable_security_hub ? 1 : 0
+  depends_on = [aws_securityhub_account.this]
+  # v1.4.0 was retired by AWS; current stable is v3.0.0. ARN format also
+  # changed from the legacy `:::ruleset/...` to `<region>::standards/...`.
+  standards_arn = "arn:aws:securityhub:${var.region}::standards/cis-aws-foundations-benchmark/v/3.0.0"
 }
 
 resource "aws_securityhub_standards_subscription" "aws_foundational" {
