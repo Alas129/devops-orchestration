@@ -14,7 +14,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-purple-950 text-slate-100 antialiased">
-        <div className="mx-auto max-w-3xl px-6 py-10">
+        <div className="mx-auto max-w-5xl px-6 py-10">
           <header className="mb-10 flex items-center justify-between">
             <a href="/" className="text-xl font-semibold tracking-tight">
               <span className="text-accent">◆</span> Task Tracker
