@@ -1,10 +1,9 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/notifier-svc
-  tag: git-296fbb628353
-  digest: sha256:d972c13d856850de895a97c4ebc60d1fa06ef223d0b19155229e8df6d88deb7c
+  tag: git-6c4ac06f9bf4
+  digest: sha256:12f7c71f4816e6e0f20294e68b444fb6eee647982cf38605080cfb7807a63490
 migration:
-  enabled: false   # per-service migrate-runner ECR repos not provisioned; rubric schema covered by gitops/platform/db-bootstrap Job
-
+  enabled: false
 ingress:
   enabled: true
   host: api.dev.calmloop.space

@@ -1,18 +1,15 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/auth-svc
-  tag: git-replaceme
-
+  tag: git-6c4ac06f9bf4
+  digest: sha256:b023346dc5e085a4bd5cffaee2dac449c2cfa4aa856fc0658773bc6960e6bb8b
 migration:
-  enabled: false   # per-service migrate-runner ECR repos not provisioned; rubric schema covered by gitops/platform/db-bootstrap Job
-
+  enabled: false
 ingress:
   enabled: true
   host: api.dev.calmloop.space
   pathPrefix: /api/v1/auth
-
 serviceAccount:
   irsaRoleArn: arn:aws:iam::164856787183:role/usf-devops-nonprod-dev-auth-svc
-
 externalSecret:
   enabled: true
   jwtSsmPath: /devops/auth-svc/jwt-secret
