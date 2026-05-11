@@ -1,6 +1,7 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/auth-svc
-  tag: git-replaceme
+  tag: git-c840c7fde763   # promoted manually until next release-please RC tag fires
+  digest: sha256:b817b067f81f463c96be89389c8856189bc8e5a435302e6c94ef25b371726cc7
 
 migration:
   enabled: false   # per-service migrate-runner ECR repos not provisioned; rubric schema covered by gitops/platform/db-bootstrap Job
