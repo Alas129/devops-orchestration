@@ -6,7 +6,7 @@ env: uat
 config:
   awsRegion: us-east-1
   dbHost: usf-devops-nonprod.c69ekamq4sxe.us-east-1.rds.amazonaws.com     # filled in once after `terraform apply` completes
-  dbName: uatops_uat
+  dbName: devops_uat
   dbUser: app_uat
   useIamAuth: true
   dbSslMode: require   # see dev/_common.yaml

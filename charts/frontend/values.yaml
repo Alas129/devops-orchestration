@@ -26,10 +26,13 @@ resources:
   requests: { cpu: 100m, memory: 256Mi }
   limits:   { memory: 512Mi }
 
-# Frontend image runs as the `app` user from its Dockerfile (USER app); we
-# only assert non-root + seccomp here and let the image dictate the UID.
+# Frontend image pins UID/GID 1000 in its Dockerfile so K8s can verify
+# runAsNonRoot without inspecting the image's non-numeric user field.
 podSecurityContext:
   runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
   seccompProfile:
     type: RuntimeDefault
 
