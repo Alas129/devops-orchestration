@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Helper to demonstrate a Karpenter-driven AMI rotation with k6 evidence.
-# Usage:  ./demo-ami-rotation.sh <env-base-url>
+# Drive a Karpenter-managed worker AMI rotation with synthetic load as
+# evidence of zero dropped requests.
+# Usage:  ./ami-rotation.sh <env-base-url>
 #
 # What it does:
 #   1. Resolves current vs latest Bottlerocket AMI from SSM

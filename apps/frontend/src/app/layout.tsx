@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "USF DevOps — Task Tracker",
-  description: "Production-grade DevOps demo",
+  description: "Task Tracker — running on the USF DevOps platform",
 };
 
 export default function RootLayout({

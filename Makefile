@@ -39,14 +39,14 @@ tf-validate: ## terraform validate every env (run after init)
 		terraform -chdir=infra/terraform/envs/$$e validate || exit 1; \
 	done
 
-# ── Demos ───────────────────────────────────────────────────────────────
-demo-ami: ## Run AMI-rotation demo against $(URL)
-	./tools/scripts/demo-ami-rotation.sh $(URL)
+# ── Operational scenarios ──────────────────────────────────────────────
+ami-rotation: ## Walk through zero-downtime worker AMI rotation (URL=https://...)
+	./tools/runbooks/ami-rotation.sh $(URL)
 
-demo-schema: ## Print the schema-migration walkthrough
-	./tools/scripts/demo-schema-migration.sh
+schema-migration: ## Print the expand→contract schema-migration walkthrough
+	./tools/runbooks/schema-migration.sh
 
 k6-zero-downtime: ## Probe an env for dropped requests (URL=https://...)
 	k6 run -e BASE_URL=$(URL) tools/load-test/k6-zero-downtime.js
 
-.PHONY: help mod-tidy vet test frontend-dev chart-lint chart-template tf-fmt tf-validate demo-ami demo-schema k6-zero-downtime
+.PHONY: help mod-tidy vet test frontend-dev chart-lint chart-template tf-fmt tf-validate ami-rotation schema-migration k6-zero-downtime

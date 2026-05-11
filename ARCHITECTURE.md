@@ -79,3 +79,54 @@
   done by default to keep the platform simple.
 - **NATS as stateful workload**: 1Gi PVC. Justifies notifier-svc's existence
   as a real async consumer instead of a webhook recipient.
+- **App secrets in SSM, not Secrets Manager**: SSM Parameter Store is free
+  for standard tier and the per-service IRSA role grants `ssm:GetParameter`
+  on `/devops/*`. RDS master credentials are the one exception — they live
+  in Secrets Manager because RDS rotation hooks expect that shape. A real
+  org would standardise on one of the two.
+
+## Cloud-account topology (today vs. real-world prod)
+
+Today everything lives in **one AWS account**. That keeps the cost and
+cognitive load low for a single-team deployment, but it's not what a
+larger org would do.
+The Terraform layout (`bootstrap` / `_shared` / `nonprod` / `prod`)
+deliberately mirrors how it should split tomorrow, so the migration is
+mostly "move a state file" rather than a rewrite.
+
+```
+                                  ┌────────────────────────────┐
+                                  │  AWS Organizations master  │
+                                  │  (billing, OUs, SCPs)      │
+                                  └─────────────┬──────────────┘
+                                                │
+              ┌─────────────────┬───────────────┴────────────────┬─────────────────────┐
+              │                 │                                │                     │
+         ┌────▼─────┐      ┌────▼─────────┐               ┌──────▼────────┐    ┌───────▼───────┐
+         │  Audit   │      │ Shared svcs  │               │   Nonprod     │    │     Prod      │
+         │ account  │      │   account    │               │   account     │    │   account     │
+         ├──────────┤      ├──────────────┤               ├───────────────┤    ├───────────────┤
+         │GuardDuty │      │  ECR (all    │               │ EKS nonprod   │    │ EKS prod      │
+         │Sec Hub   │      │   images,    │ ◄─ pulls ──── │ RDS single-AZ │    │ RDS Multi-AZ  │
+         │AWS Config│      │   replicate  │ ◄─ pulls ────                      │ ─────────────►
+         │CloudTrail│      │   to DR rgn) │                                    │  AWS Backup    │
+         │ log lake │      │ KMS shared   │                                    │  cross-region  │
+         │ Athena   │      │ OIDC IAM     │                                    └────────────────┘
+         └──────────┘      │   (GHA roles)│
+                          └──────────────┘
+```
+
+Today's mapping:
+
+| Terraform composition | Today (single account) | Real org |
+|---|---|---|
+| `bootstrap` (state backend) | management account | management account |
+| `_shared` (ECR, OIDC, security baseline) | management account | "Shared services" + "Audit" accounts |
+| `nonprod` | management account | dedicated nonprod account |
+| `prod` | management account | dedicated prod account |
+
+To migrate to multi-account later: add an AWS Organizations + Control
+Tower (or Terraform AFT) layer on top, move the `_shared` Terraform
+state into a fresh "shared-services" account, and update the OIDC
+trust to cross-account assume. The application Terraform doesn't need
+to change.

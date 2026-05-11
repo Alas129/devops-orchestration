@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Walk through the three-step expand→migrate→contract migration demo.
-# Doesn't actually touch the cluster; prints the sequence of commits to make.
+# Walk through the three-step expand → migrate-readers → contract pattern
+# for a zero-downtime schema rename. Prints the sequence of commits to make;
+# does not touch the cluster directly.
 set -euo pipefail
 
 cat <<'TXT'
-Three-step "rename tasks.title → tasks.name" demo
+Three-step "rename tasks.title → tasks.name" procedure
 
 Each release is independently deployable + rollback-safe.
 Run k6 in the background throughout to prove zero dropped requests.

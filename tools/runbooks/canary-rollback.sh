@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Demonstrate Argo Rollouts canary auto-rollback: deploy a deliberately
+# Drive Argo Rollouts canary auto-rollback end-to-end: deploy a deliberately
 # broken image, watch the AnalysisTemplate fail, watch Argo Rollouts abort
-# the canary and pin traffic back to the stable ReplicaSet.
+# the canary and pin traffic back to the stable ReplicaSet. Use this to
+# verify the rollback path works whenever you change AnalysisTemplate
+# thresholds or rollout strategy.
 #
 # Usage:
-#   ./demo-canary-rollback.sh <namespace> <rollout-name> <broken-image-tag>
+#   ./canary-rollback.sh <namespace> <rollout-name> <broken-image-tag>
 #
 # Example:
-#   ./demo-canary-rollback.sh dev auth-svc git-DEADBEEFFFFF
+#   ./canary-rollback.sh dev auth-svc git-DEADBEEFFFFF
 #
 # What it does:
 #   1. Patches the rollout to use the broken image tag (simulating a buggy

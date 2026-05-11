@@ -69,7 +69,7 @@ a replacement with the new AMI, and deletes the old node.
 ### Procedure
 
 ```sh
-# 1. Start a synthetic load against the env you're rotating (use uat for the demo)
+# 1. Start a synthetic load against the env you're rotating (use uat to keep blast radius contained)
 k6 run -e BASE_URL=https://app.uat.<your-domain> -e DURATION=10m tools/load-test/k6-zero-downtime.js &
 K6_PID=$!
 
@@ -148,12 +148,12 @@ SQL
 # 7. Watch ArgoCD UI: PreSync job runs the migration first, then canary begins
 ```
 
-### Demonstrating a deliberate-fail migration (rubric bonus)
+### Deliberate-fail migration — verifying the safety net
 
 Push a migration like `ALTER TABLE tasks ADD COLUMN x TEXT NOT NULL;` (no
 default, with existing rows). It will fail; ArgoCD will show the PreSync Job
-in error, the Sync as blocked, and the old ReplicaSet still serving. Take a
-screenshot for the demo.
+in error, the Sync as blocked, and the old ReplicaSet still serving. Capture
+the ArgoCD UI state as evidence for the post-incident review.
 
 ---
 
