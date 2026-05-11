@@ -40,7 +40,8 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
 
       - name: Notify Slack — started
-        run: ./tools/slack-notify.sh START "promote → UAT triggered by tag ${{ github.ref_name }}" "verifying cosign signatures on QA images..."
+        run: |
+          ./tools/slack-notify.sh START "promote to UAT triggered by tag ${{ github.ref_name }}" "verifying cosign signatures on QA images..."
 
       - name: Read QA image refs + cosign verify
         env:
@@ -90,8 +91,10 @@ jobs:
 
       - name: Notify Slack — success
         if: success()
-        run: ./tools/slack-notify.sh SUCCESS "UAT release ${{ github.ref_name }} deployed" "4/4 cosign signatures verified" "ArgoCD will reconcile UAT in ~30s"
+        run: |
+          ./tools/slack-notify.sh SUCCESS "UAT release ${{ github.ref_name }} deployed" "4/4 cosign signatures verified" "ArgoCD will reconcile UAT in ~30s"
 
       - name: Notify Slack — failed
         if: failure()
-        run: ./tools/slack-notify.sh FAIL "promote → UAT failed for ${{ github.ref_name }}" "see workflow run for details"
+        run: |
+          ./tools/slack-notify.sh FAIL "promote to UAT failed for ${{ github.ref_name }}" "see workflow run for details"

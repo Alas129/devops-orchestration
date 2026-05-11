@@ -25,7 +25,8 @@ jobs:
           aws-region: us-east-1
 
       - name: Notify Slack — started
-        run: ./tools/slack-notify.sh START "nightly-qa · promoting dev → qa" "trigger: ${{ github.event_name }}"
+        run: |
+          ./tools/slack-notify.sh START "nightly-qa · promoting dev to qa" "trigger - ${{ github.event_name }}"
 
       # In a real setup we'd run integration / k6 smoke against dev here.
       # For this scaffold we trust per-service CI tests + Argo Rollouts'
@@ -69,4 +70,5 @@ jobs:
 
       - name: Notify Slack — failed
         if: failure()
-        run: ./tools/slack-notify.sh FAIL "nightly-qa workflow FAILED" "see run for logs"
+        run: |
+          ./tools/slack-notify.sh FAIL "nightly-qa workflow FAILED" "see run for logs"
