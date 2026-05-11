@@ -38,7 +38,8 @@ jobs:
 
       - name: Ruff lint
         working-directory: apps/ai-bot
-        run: ruff check ai_bot/ || echo "WARN: ruff issues — not blocking"
+        run: |
+          ruff check ai_bot/ || echo "ruff issues - not blocking"
 
       - name: Import sanity (config must parse)
         working-directory: apps/ai-bot
