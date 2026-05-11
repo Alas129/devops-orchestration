@@ -91,25 +91,9 @@ module "backup" {
   enable_vault_lock       = false # flip to true after first successful backup
 }
 
-resource "postgresql_role" "prod" {
-  name     = "app_prod"
-  login    = true
-  password = ""
-  roles    = ["rds_iam"]
-}
-
-resource "postgresql_database" "prod" {
-  name              = "devops_prod"
-  owner             = postgresql_role.prod.name
-  encoding          = "UTF8"
-  lc_collate        = "en_US.UTF-8"
-  lc_ctype          = "en_US.UTF-8"
-  template          = "template0"
-  connection_limit  = -1
-  allow_connections = true
-
-  depends_on = [postgresql_role.prod]
-}
+# DB role + database NOT managed here — see gitops/platform/db-bootstrap/.
+# The Terraform postgresql provider can't reach private-subnet RDS from a
+# GHA runner outside the VPC. K8s Job inside the cluster handles it.
 
 # ── ACM (cluster + per-env certs) ──────────────────────────────────────────
 module "acm_prod" {

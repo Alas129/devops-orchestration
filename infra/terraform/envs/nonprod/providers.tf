@@ -51,14 +51,7 @@ provider "kubectl" {
   load_config_file       = false
 }
 
-provider "postgresql" {
-  host             = module.rds.address
-  port             = module.rds.port
-  username         = module.rds.master_username
-  password         = module.rds.master_password
-  superuser        = false
-  sslmode          = "require"
-  connect_timeout  = 15
-  database         = module.rds.initial_database
-  expected_version = "16"
-}
+# postgresql provider removed — DB role management migrated to a K8s Job
+# (see gitops/platform/db-bootstrap/). RDS is on private subnets so a
+# Terraform provider running from a GHA runner outside the VPC cannot
+# reach it; in-cluster Job is the standard pattern.

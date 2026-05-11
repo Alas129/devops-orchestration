@@ -49,14 +49,5 @@ provider "kubectl" {
   load_config_file       = false
 }
 
-provider "postgresql" {
-  host             = module.rds.address
-  port             = module.rds.port
-  username         = module.rds.master_username
-  password         = module.rds.master_password
-  superuser        = false
-  sslmode          = "require"
-  connect_timeout  = 15
-  database         = module.rds.initial_database
-  expected_version = "16"
-}
+# postgresql provider removed — see gitops/platform/db-bootstrap/ for the
+# in-cluster K8s Job that handles DB role + database creation.

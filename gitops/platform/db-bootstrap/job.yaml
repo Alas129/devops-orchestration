@@ -1,0 +1,112 @@
+# One-shot Job that creates the per-env Postgres roles + databases on the
+# shared RDS instance. Runs from inside the cluster (in the VPC) so it can
+# reach the private RDS endpoint.
+#
+# The RDS master credentials live in AWS Secrets Manager (created by the
+# rds Terraform module). External Secrets Operator (ESO) pulls them into a
+# K8s Secret; this Job mounts that Secret and runs idempotent SQL.
+#
+# Sync wave -10 ensures this completes BEFORE any application Application
+# tries to start (app pods would fail to IAM-auth to a non-existent role).
+
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: rds-master
+  namespace: db-bootstrap
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: ClusterSecretStore
+  target:
+    name: rds-master
+    creationPolicy: Owner
+  data:
+    - secretKey: username
+      remoteRef:
+        key: usf-devops-nonprod/rds/master
+        property: username
+    - secretKey: password
+      remoteRef:
+        key: usf-devops-nonprod/rds/master
+        property: password
+    - secretKey: host
+      remoteRef:
+        key: usf-devops-nonprod/rds/master
+        property: host
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-bootstrap
+  namespace: db-bootstrap
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 5
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70    # postgres user in alpine/postgres image
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: psql
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PGHOST
+              valueFrom: { secretKeyRef: { name: rds-master, key: host } }
+            - name: PGUSER
+              valueFrom: { secretKeyRef: { name: rds-master, key: username } }
+            - name: PGPASSWORD
+              valueFrom: { secretKeyRef: { name: rds-master, key: password } }
+            - name: PGSSLMODE
+              value: require
+            - name: ENVS
+              value: "dev qa uat"   # overridden in prod overlay to "prod"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              for env in $ENVS; do
+                role="app_${env}"
+                db="devops_${env}"
+
+                echo "→ creating role ${role} (IAM-auth)"
+                psql -d postgres -v ON_ERROR_STOP=1 <<SQL
+                  DO \$\$
+                  BEGIN
+                    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${role}') THEN
+                      CREATE ROLE ${role} LOGIN;
+                      GRANT rds_iam TO ${role};
+                    END IF;
+                  END
+                  \$\$;
+              SQL
+
+                echo "→ creating database ${db} owned by ${role}"
+                # CREATE DATABASE cannot run inside a transaction; do existence check separately.
+                if ! psql -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" -d postgres | grep -q 1; then
+                  psql -d postgres -c "CREATE DATABASE ${db} OWNER ${role}"
+                fi
+              done
+              echo "✓ done"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { memory: 128Mi }

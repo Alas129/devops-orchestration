@@ -54,33 +54,17 @@ module "rds" {
   initial_database        = "postgres"
 }
 
-# Per-env logical databases + IAM-auth roles.
-# Dev/qa/uat are namespaces in the same EKS cluster pointing at separate
-# Postgres roles + databases inside the same RDS instance.
-resource "postgresql_role" "env" {
-  for_each = toset(var.envs)
-
-  name     = "app_${each.key}"
-  login    = true
-  password = "" # IAM auth — no password
-  # The rds_iam role is created by RDS automatically when iam_database_authentication_enabled=true.
-  roles = ["rds_iam"]
-}
-
-resource "postgresql_database" "env" {
-  for_each = toset(var.envs)
-
-  name              = "devops_${each.key}"
-  owner             = postgresql_role.env[each.key].name
-  encoding          = "UTF8"
-  lc_collate        = "en_US.UTF-8"
-  lc_ctype          = "en_US.UTF-8"
-  template          = "template0"
-  connection_limit  = -1
-  allow_connections = true
-
-  depends_on = [postgresql_role.env]
-}
+# Per-env logical databases + IAM-auth roles are NOT managed by Terraform.
+#
+# Why not: the postgresql Terraform provider has to connect TCP to RDS on
+# 5432. RDS lives on private subnets; the GitHub Actions runner that runs
+# `terraform apply` lives outside the VPC. The provider hangs/times out.
+#
+# Standard fix: manage DB roles + databases via a K8s Job that runs inside
+# the cluster (i.e. inside the VPC). The Job pulls the RDS master credentials
+# from Secrets Manager via External Secrets Operator, then runs idempotent
+# psql `CREATE ROLE IF NOT EXISTS / CREATE DATABASE IF NOT EXISTS` against
+# RDS. Lives under gitops/platform/db-bootstrap/.
 
 # ── ACM wildcard cert per env subdomain ────────────────────────────────────
 module "acm_dev" {

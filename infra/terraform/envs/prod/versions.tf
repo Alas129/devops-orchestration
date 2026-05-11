@@ -22,10 +22,6 @@ terraform {
       source  = "alekc/kubectl"
       version = "~> 2.1"
     }
-    postgresql = {
-      source  = "cyrilgdn/postgresql"
-      version = "~> 1.23"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6"
