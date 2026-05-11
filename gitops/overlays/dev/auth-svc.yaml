@@ -1,7 +1,7 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/auth-svc
-  tag: git-937e1b34208f
-  digest: sha256:29802810c6b49a3db851a70ca80538f71d781132906f8984a44be79885f44986
+  tag: git-717024bc2a69
+  digest: sha256:69acaed05768acb2dd2a84a48b4243fec469ea419448bd40af905aff02852f83
 migration:
   enabled: false
 ingress:
