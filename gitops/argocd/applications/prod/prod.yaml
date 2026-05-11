@@ -25,10 +25,10 @@ spec:
     spec:
       project: prod
       sources:
-        - repoURL: https://github.com/alusigmi/devops-orchestration.git
+        - repoURL: https://github.com/Alas129/devops-orchestration.git
           targetRevision: main
           ref: values
-        - repoURL: https://github.com/alusigmi/devops-orchestration.git
+        - repoURL: https://github.com/Alas129/devops-orchestration.git
           targetRevision: main
           path: 'charts/{{ .name }}'
           helm:

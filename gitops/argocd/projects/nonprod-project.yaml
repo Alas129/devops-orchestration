@@ -8,7 +8,7 @@ metadata:
 spec:
   description: "Nonprod cluster — dev / qa / uat namespaces share the cluster but are isolated as separate destinations."
   sourceRepos:
-    - "https://github.com/alusigmi/devops-orchestration.git"
+    - "https://github.com/Alas129/devops-orchestration.git"
 
   destinations:
     - namespace: dev

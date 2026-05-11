@@ -8,7 +8,7 @@ metadata:
 spec:
   description: "Prod cluster — application workloads only. Cluster-scoped resources are off-limits."
   sourceRepos:
-    - "https://github.com/alusigmi/devops-orchestration.git"
+    - "https://github.com/Alas129/devops-orchestration.git"
 
   destinations:
     - namespace: prod
