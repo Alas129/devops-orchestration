@@ -1,9 +1,14 @@
 name: promote → PROD
 
 # Triggered by release-please cutting a stable tag (e.g. v1.2.0). Only fires
-# for non-prerelease tags. Verifies cosign signatures of every service image
-# at that tag, then bumps gitops/overlays/prod/*.yaml. ArgoCD on the prod
-# cluster runs PreSync migrations and a canary.
+# for non-prerelease tags. Semantics: "freeze the current UAT state as a PROD
+# release". Reads image refs from gitops/overlays/uat/*.yaml, cosign-verifies
+# each, then writes them to gitops/overlays/prod/*.yaml.
+#
+# Gates (defense in depth):
+#   1. GitHub Environment "prod-promote" → required human reviewer
+#   2. cosign keyless verify each image's Sigstore signature
+#   3. (in-cluster) Kyverno verifyImages ClusterPolicy at admission
 
 on:
   push:
@@ -15,14 +20,18 @@ permissions:
   contents: write
 
 jobs:
-  verify:
-    name: cosign verify
-    # Skip until ECR exists and images are actually being pushed.
+  promote:
+    name: verify + bump prod overlay
     if: ${{ vars.AWS_BOOTSTRAPPED == 'true' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     environment: prod-promote
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITOPS_BOT_TOKEN }}
+
       - uses: sigstore/cosign-installer@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -31,48 +40,48 @@ jobs:
           aws-region: us-east-1
       - uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Verify each service image is signed
+      - name: Read UAT image refs + cosign verify
         env:
           REGISTRY: ${{ vars.ECR_REGISTRY }}
-          TAG: ${{ github.ref_name }}
           OIDC_ISSUER: https://token.actions.githubusercontent.com
           IDENTITY_REGEX: ^https://github.com/${{ github.repository }}/.+$
         run: |
           set -e
           for svc in frontend auth-svc tasks-svc notifier-svc; do
-            echo "→ verifying $svc:$TAG"
+            TAG=$(python3 -c "import yaml; print(yaml.safe_load(open('gitops/overlays/uat/${svc}.yaml'))['image']['tag'])")
+            echo "→ verifying ${svc}:${TAG}"
             cosign verify \
               --certificate-oidc-issuer "$OIDC_ISSUER" \
               --certificate-identity-regexp "$IDENTITY_REGEX" \
-              "$REGISTRY/usf-devops/$svc:$TAG"
+              "$REGISTRY/usf-devops/${svc}:${TAG}"
           done
 
-  bump:
-    name: bump prod overlay
-    needs: verify
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          token: ${{ secrets.GITOPS_BOT_TOKEN }}
-
-      - name: Bump PROD overlay
+      - name: Bump PROD overlay (copy UAT image refs)
         env:
-          TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           set -e
           git config user.name "gitops-bot"
           git config user.email "gitops-bot@users.noreply.github.com"
           python3 - <<PY
-          import yaml, os
-          tag = os.environ["TAG"]
+          import yaml
           for svc in ("frontend", "auth-svc", "tasks-svc", "notifier-svc"):
-              p = f"gitops/overlays/prod/{svc}.yaml"
-              with open(p) as f: d = yaml.safe_load(f) or {}
-              d.setdefault("image", {})["tag"] = tag
-              with open(p, "w") as f: yaml.safe_dump(d, f, sort_keys=False, default_flow_style=False)
+              with open(f"gitops/overlays/uat/{svc}.yaml") as f:
+                  uat = yaml.safe_load(f) or {}
+              with open(f"gitops/overlays/prod/{svc}.yaml") as f:
+                  prod = yaml.safe_load(f) or {}
+              prod.setdefault("image", {})
+              prod["image"]["repository"] = uat["image"]["repository"]
+              prod["image"]["tag"] = uat["image"]["tag"]
+              if "digest" in uat["image"]:
+                  prod["image"]["digest"] = uat["image"]["digest"]
+              with open(f"gitops/overlays/prod/{svc}.yaml", "w") as f:
+                  yaml.safe_dump(prod, f, sort_keys=False, default_flow_style=False)
           PY
           git add gitops/overlays/prod/*.yaml
-          git commit -m "chore(prod): promote to $TAG"
-          git push origin main
+          if git diff --cached --quiet; then
+            echo "no overlay changes (prod already == uat) — nothing to commit"
+          else
+            git commit -m "chore(prod): promote from UAT via release tag ${RELEASE_TAG}"
+            git push origin main
+          fi

@@ -1,9 +1,14 @@
 name: promote → UAT
 
 # Triggered by release-please cutting a pre-release tag (e.g. v1.2.0-rc.1).
-# Verifies cosign signatures and bumps gitops/overlays/uat/*.yaml so ArgoCD
-# on the nonprod cluster rolls UAT to the new tag. ArgoCD then runs PreSync
-# migrations and a canary.
+# Semantics: "freeze the current QA state as a UAT release". Reads image
+# tags+digests from gitops/overlays/qa/*.yaml, cosign-verifies each, then
+# writes them to gitops/overlays/uat/*.yaml. ArgoCD then rolls UAT.
+#
+# The git tag itself is not an image tag — every service has an independent
+# `git-<sha12>` tag from its own CI build, so a single release version can't
+# map to one image. Treating the release tag as a "freeze pointer" sidesteps
+# this entirely.
 
 on:
   push:
@@ -15,13 +20,17 @@ permissions:
   contents: write
 
 jobs:
-  verify:
-    name: cosign verify
-    # Skip until ECR exists and images are actually being pushed.
+  promote:
+    name: verify + bump uat overlay
     if: ${{ vars.AWS_BOOTSTRAPPED == 'true' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITOPS_BOT_TOKEN }}
+
       - uses: sigstore/cosign-installer@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -30,48 +39,48 @@ jobs:
           aws-region: us-east-1
       - uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Verify each service image is signed
+      - name: Read QA image refs + cosign verify
         env:
           REGISTRY: ${{ vars.ECR_REGISTRY }}
-          TAG: ${{ github.ref_name }}
           OIDC_ISSUER: https://token.actions.githubusercontent.com
           IDENTITY_REGEX: ^https://github.com/${{ github.repository }}/.+$
         run: |
           set -e
           for svc in frontend auth-svc tasks-svc notifier-svc; do
-            echo "→ verifying $svc:$TAG"
+            TAG=$(python3 -c "import yaml; print(yaml.safe_load(open('gitops/overlays/qa/${svc}.yaml'))['image']['tag'])")
+            echo "→ verifying ${svc}:${TAG}"
             cosign verify \
               --certificate-oidc-issuer "$OIDC_ISSUER" \
               --certificate-identity-regexp "$IDENTITY_REGEX" \
-              "$REGISTRY/usf-devops/$svc:$TAG"
+              "$REGISTRY/usf-devops/${svc}:${TAG}"
           done
 
-  bump:
-    name: bump uat overlay
-    needs: verify
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          token: ${{ secrets.GITOPS_BOT_TOKEN }}
-
-      - name: Bump UAT overlay
+      - name: Bump UAT overlay (copy QA image refs)
         env:
-          TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           set -e
           git config user.name "gitops-bot"
           git config user.email "gitops-bot@users.noreply.github.com"
           python3 - <<PY
-          import yaml, os
-          tag = os.environ["TAG"]
+          import yaml
           for svc in ("frontend", "auth-svc", "tasks-svc", "notifier-svc"):
-              p = f"gitops/overlays/uat/{svc}.yaml"
-              with open(p) as f: d = yaml.safe_load(f) or {}
-              d.setdefault("image", {})["tag"] = tag
-              with open(p, "w") as f: yaml.safe_dump(d, f, sort_keys=False, default_flow_style=False)
+              with open(f"gitops/overlays/qa/{svc}.yaml") as f:
+                  qa = yaml.safe_load(f) or {}
+              with open(f"gitops/overlays/uat/{svc}.yaml") as f:
+                  uat = yaml.safe_load(f) or {}
+              uat.setdefault("image", {})
+              uat["image"]["repository"] = qa["image"]["repository"]
+              uat["image"]["tag"] = qa["image"]["tag"]
+              if "digest" in qa["image"]:
+                  uat["image"]["digest"] = qa["image"]["digest"]
+              with open(f"gitops/overlays/uat/{svc}.yaml", "w") as f:
+                  yaml.safe_dump(uat, f, sort_keys=False, default_flow_style=False)
           PY
           git add gitops/overlays/uat/*.yaml
-          git commit -m "chore(uat): promote to $TAG"
-          git push origin main
+          if git diff --cached --quiet; then
+            echo "no overlay changes (uat already == qa) — nothing to commit"
+          else
+            git commit -m "chore(uat): promote from QA via release tag ${RELEASE_TAG}"
+            git push origin main
+          fi
