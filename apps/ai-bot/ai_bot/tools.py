@@ -186,6 +186,132 @@ def recent_alerts() -> dict:
 # ───────────────────────── tool registry for Claude ──────────────────────
 
 
+# ───────────────────────── WRITE tools (gated by allowlist) ──────────────
+
+
+async def trigger_workflow_dispatch(
+    *,
+    workflow: str,
+    ref: str = "main",
+    inputs: dict | None = None,
+    repository: str,
+    github_token: str,
+) -> dict:
+    """Trigger a GitHub Actions workflow via workflow_dispatch.
+
+    workflow: filename (e.g. 'nightly-qa.yaml', 'promote-uat.yaml')
+    ref: branch or tag ref
+    """
+    if not github_token:
+        return {"error": "no GITHUB_API_TOKEN configured — workflow dispatch unavailable"}
+    url = f"https://api.github.com/repos/{repository}/actions/workflows/{workflow}/dispatches"
+    async with httpx.AsyncClient(timeout=15.0) as cli:
+        r = await cli.post(
+            url,
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {github_token}",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            json={"ref": ref, "inputs": inputs or {}},
+        )
+        if r.status_code in (200, 204):
+            return {"ok": True, "workflow": workflow, "ref": ref}
+        return {"error": f"HTTP {r.status_code}: {r.text[:400]}"}
+
+
+async def create_release_tag(
+    *,
+    tag: str,
+    target_sha: str | None,
+    repository: str,
+    github_token: str,
+) -> dict:
+    """Create a lightweight git tag pointing at a commit. Triggers promote-uat
+    or promote-prod via the workflow's `on: push: tags:` filter.
+
+    tag:        e.g. 'v0.1.0-rc.5'
+    target_sha: commit SHA the tag should point at (default = current main HEAD)
+    """
+    if not github_token:
+        return {"error": "no GITHUB_API_TOKEN configured"}
+    # Resolve target SHA if not provided.
+    async with httpx.AsyncClient(timeout=15.0) as cli:
+        if not target_sha:
+            r = await cli.get(
+                f"https://api.github.com/repos/{repository}/git/refs/heads/main",
+                headers={"Authorization": f"Bearer {github_token}"},
+            )
+            if r.status_code != 200:
+                return {"error": f"could not resolve main: HTTP {r.status_code}: {r.text[:300]}"}
+            target_sha = r.json()["object"]["sha"]
+
+        r = await cli.post(
+            f"https://api.github.com/repos/{repository}/git/refs",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {github_token}",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            json={"ref": f"refs/tags/{tag}", "sha": target_sha},
+        )
+        if r.status_code in (200, 201):
+            return {"ok": True, "tag": tag, "sha": target_sha}
+        return {"error": f"HTTP {r.status_code}: {r.text[:400]}"}
+
+
+def force_argocd_sync(*, app_name: str, revision: str | None = None) -> dict:
+    """Force an ArgoCD Application to re-sync NOW (recovery from stuck
+    multi-source race or unstuck a degraded App).
+
+    revision: optional git SHA to pin the sync to (avoids re-hitting the race)
+    """
+    _init_k8s()
+    api = client.CustomObjectsApi()
+    body = {"operation": {"sync": {"prune": True, "syncStrategy": {"hook": {}}}}}
+    if revision:
+        body["operation"]["sync"]["revision"] = revision
+    try:
+        api.patch_namespaced_custom_object(
+            group="argoproj.io",
+            version="v1alpha1",
+            namespace="argocd",
+            plural="applications",
+            name=app_name,
+            body=body,
+        )
+    except ApiException as e:
+        return {"error": f"ArgoCD patch failed: {e.status} {e.reason}"}
+    return {"ok": True, "app": app_name, "revision_pinned": revision or "main HEAD"}
+
+
+def restart_pods(*, namespace: str, label_selector: str) -> dict:
+    """Delete pods matching a label selector. The Deployment/Rollout
+    controller recreates them — useful for forcing IAM token refresh or
+    recovering from stuck readiness probes.
+
+    label_selector: e.g. 'app.kubernetes.io/name=tasks-svc'
+    """
+    _init_k8s()
+    v1 = client.CoreV1Api()
+    try:
+        pods = v1.list_namespaced_pod(namespace=namespace, label_selector=label_selector).items
+    except ApiException as e:
+        return {"error": f"list pods failed: {e.status} {e.reason}"}
+    deleted = []
+    errors = []
+    for p in pods:
+        try:
+            v1.delete_namespaced_pod(name=p.metadata.name, namespace=namespace, grace_period_seconds=15)
+            deleted.append(p.metadata.name)
+        except ApiException as e:
+            errors.append({"pod": p.metadata.name, "error": f"{e.status} {e.reason}"})
+    return {"deleted": deleted, "errors": errors, "count": len(deleted)}
+
+
+# ───────────────────────── tool registry for Claude ──────────────────────
+
+
 TOOL_SCHEMAS: list[dict] = [
     {
         "name": "list_namespaces",

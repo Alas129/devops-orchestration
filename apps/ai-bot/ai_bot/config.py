@@ -36,12 +36,17 @@ class Config:
                 raise RuntimeError(f"required env var {key} is empty")
             return v
 
+        allow_csv = os.environ.get("AI_BOT_ALLOWED_WRITE_USERS", "").strip()
+        allowed = frozenset(u.strip() for u in allow_csv.split(",") if u.strip())
         return cls(
             slack_signing_secret=required("SLACK_SIGNING_SECRET"),
             anthropic_api_key=required("ANTHROPIC_API_KEY"),
+            github_api_token=os.environ.get("GITHUB_API_TOKEN", ""),
             model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-5"),
             max_tool_iterations=int(os.environ.get("MAX_TOOL_ITERATIONS", "10")),
             cluster_name=os.environ.get("CLUSTER_NAME", "usf-devops-nonprod"),
+            repository=os.environ.get("GITHUB_REPOSITORY", "Alas129/devops-orchestration"),
+            allowed_write_users=allowed,
             prom_url=os.environ.get(
                 "PROM_URL",
                 "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090",
