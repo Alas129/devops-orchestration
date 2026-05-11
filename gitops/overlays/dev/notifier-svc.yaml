@@ -1,7 +1,7 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/notifier-svc
-  tag: git-6c4ac06f9bf4
-  digest: sha256:12f7c71f4816e6e0f20294e68b444fb6eee647982cf38605080cfb7807a63490
+  tag: git-937e1b34208f
+  digest: sha256:94edfa87f836671651929196797d8380689b1ebd3a17301dc0e8d83543f9f6cd
 migration:
   enabled: false
 ingress:
