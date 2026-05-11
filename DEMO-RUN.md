@@ -38,10 +38,17 @@ Expected: 8 pods, all `1/1 Running`.
 If any are `0/1`, **stop**, fix the IAM token issue (described in
 CLAUDE.md → Sharp edges), then start the demo.
 
-### 0.3 Login to ArgoCD UI
+### 0.3 Login + tidy ArgoCD UI (avoid showing 13 cards on screen)
 
-Click GitHub OAuth on Tab 3. Filter sidebar → Project = `nonprod` (hides
-the orphan `root` app). Sort = name.
+Click GitHub OAuth on Tab 3. Then in the **left filter sidebar**:
+
+1. **Project = `nonprod`** (hides orphan `root` app + `node-alerts`/`db-bootstrap` platform apps)
+2. **Labels → `env=dev`** during §3 (only 4 dev-* cards shown)
+3. Switch to `env=qa` during §4, `env=uat` during §5
+
+Better visual: **star** these 4 apps with the ⭐ icon — `dev-auth-svc`,
+`dev-frontend`, `qa-frontend`, `uat-frontend` — then toggle **"Favorites Only"**
+during the main walk. Only 4 cards on screen, much easier for the evaluator to follow.
 
 ### 0.4 Observability layer — three places to look during the demo
 
@@ -487,6 +494,27 @@ kubectl --context nonprod -n dev get pods
 ```
 
 Buys you 15 minutes of healthy pods (enough for the demo).
+
+---
+
+## Known limitations (be ready, evaluator may ask)
+
+Three things the evaluator might notice. Quick honest answers:
+
+| What they'll see | What to say |
+|---|---|
+| **`root` Application missing from filtered view** | "Pre-existing orphan from initial bootstrap — was created out-of-band in project `default` which has empty allow-lists. New platform apps need a one-time `kubectl apply` until I re-create it under git. Doesn't affect any running service." |
+| **A few dev/qa/uat backend Apps show 🟡 OutOfSync** | "ArgoCD multi-source `targetRevision: main` race when CI's auto-bump pushes mid-sync. Recovery is one `kubectl patch` with revision pinning. Long-term fix is `targetRevision: HEAD` on the `$values` ref source — small ApplicationSet edit." |
+| **Prod cluster shows no traffic** | "Prod TF code is complete and reviewable (`infra/terraform/envs/prod/`); just not applied yet (~$200/mo cost). Prod overlays have zero `REPLACE_*` placeholders now — when prod is applied, `terraform apply` + a Cloudflare CNAME for `prod-db.calmloop.space` is the only post-apply step." |
+
+If they ask "why no UI promote button (click dev → qa in the app frontend)":
+
+> "Two reasons. First, the app can't deploy itself — if the new version is broken,
+> the deploy button is broken too. Second, the rubric explicitly disallows
+> 'click-to-deploy' — git-driven promotion is the explicit requirement.
+> If we wanted interactive UX, ChatOps (`/promote auth-svc qa→uat` in Slack) or an
+> Internal Developer Platform like Backstage layer the same thing on top without
+> coupling the application to its own deployment."
 
 ---
 

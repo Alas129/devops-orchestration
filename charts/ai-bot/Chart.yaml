@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ai-bot
+description: SRE assistant — Claude tool-use over cluster read APIs, called via Slack slash commands.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

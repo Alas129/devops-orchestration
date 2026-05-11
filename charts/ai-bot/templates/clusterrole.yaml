@@ -1,0 +1,32 @@
+# Read-only across the resources the bot may inspect. Verbs strictly limited to
+# `get / list / watch` — the K8s API itself rejects any mutation attempt from
+# this ServiceAccount, even if the application code is compromised.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ai-bot-readonly
+  labels: {{- include "ai-bot.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "events", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["rollouts", "applications", "applicationsets", "analysisruns", "analysistemplates"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["prometheusrules", "servicemonitors", "alertmanagerconfigs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["external-secrets.io"]
+    resources: ["externalsecrets"]
+    verbs: ["get", "list", "watch"]
+  # NOTE: secrets are NOT in this allow-list. The bot can see Secret names
+  # (via configmaps + external-secrets references) but not data — safer.

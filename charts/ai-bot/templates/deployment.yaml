@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-bot
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ai-bot.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels: {{- include "ai-bot.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ai-bot.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      automountServiceAccountToken: true        # needed for in-cluster K8s API
+      terminationGracePeriodSeconds: 20
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ end }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          env:
+            - name: CLAUDE_MODEL
+              value: {{ .Values.config.claudeModel | quote }}
+            - name: MAX_TOOL_ITERATIONS
+              value: {{ .Values.config.maxToolIterations | quote }}
+            - name: CLUSTER_NAME
+              value: {{ .Values.config.clusterName | quote }}
+            - name: PROM_URL
+              value: {{ .Values.config.promUrl | quote }}
+            - name: LOKI_URL
+              value: {{ .Values.config.lokiUrl | quote }}
+            - name: SLACK_SIGNING_SECRET
+              valueFrom: { secretKeyRef: { name: ai-bot-secrets, key: slack_signing_secret } }
+            - name: ANTHROPIC_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-bot-secrets, key: anthropic_api_key } }
+          readinessProbe:
+            httpGet: { path: {{ .Values.probes.readiness.path }}, port: http }
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          livenessProbe:
+            httpGet: { path: {{ .Values.probes.liveness.path }}, port: http }
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
