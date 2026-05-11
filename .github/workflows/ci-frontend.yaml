@@ -91,7 +91,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=frontend
 
       - name: Trivy scan (blocking)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ vars.ECR_REGISTRY }}/usf-devops/frontend:${{ steps.meta.outputs.tag }}
           format: sarif
