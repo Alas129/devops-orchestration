@@ -41,6 +41,15 @@ module "alb_logs" {
   retention_days = 365
 }
 
+# ── WAFv2 in front of the ALBs (prod only) ────────────────────────────────
+module "waf" {
+  source              = "../../modules/waf"
+  name                = "${local.cluster_name}-alb"
+  rate_limit_per_5min = 2000
+  enable_logging      = true
+  log_retention_days  = 30
+}
+
 module "karpenter" {
   source            = "../../modules/karpenter"
   project           = var.project
@@ -66,6 +75,20 @@ module "rds" {
   backup_retention_period    = 30
   monitoring_interval        = 60
   initial_database           = "postgres"
+}
+
+# ── AWS Backup vault — extra layer on top of RDS automated backups ────────
+# Why both? RDS automated backup is in-region only. AWS Backup gives us
+# vault lock, plan-managed retention, and (when configured) cross-region
+# copy for true DR.
+module "backup" {
+  source                  = "../../modules/backup"
+  name                    = local.cluster_name
+  rds_arns                = [module.rds.arn]
+  schedule                = "cron(0 5 ? * * *)"
+  cold_storage_after_days = 7
+  delete_after_days       = 30
+  enable_vault_lock       = false # flip to true after first successful backup
 }
 
 resource "postgresql_role" "prod" {

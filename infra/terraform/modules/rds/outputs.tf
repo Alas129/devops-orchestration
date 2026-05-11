@@ -2,6 +2,11 @@ output "endpoint" {
   value = aws_db_instance.this.endpoint
 }
 
+output "arn" {
+  description = "DB instance ARN — used by AWS Backup selection."
+  value       = aws_db_instance.this.arn
+}
+
 output "address" {
   value = aws_db_instance.this.address
 }

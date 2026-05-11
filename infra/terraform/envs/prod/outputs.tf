@@ -56,3 +56,12 @@ output "secrets_kms_key_arn" {
   description = "KMS CMK encrypting K8s secrets in etcd"
   value       = module.eks.secrets_kms_key_arn
 }
+
+output "waf_acl_arn" {
+  description = "Web ACL ARN — paste into gitops/overlays/prod/_common.yaml under ingress.wafAclArn"
+  value       = module.waf.web_acl_arn
+}
+
+output "backup_vault_arn" {
+  value = module.backup.vault_arn
+}

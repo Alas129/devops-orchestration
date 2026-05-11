@@ -67,11 +67,10 @@ jobs:
           sarif_file: gosec-${{ inputs.service }}.sarif
           category: gosec-${{ inputs.service }}
 
-      - name: govulncheck
-        uses: golang/govulncheck-action@v1
-        with:
-          go-version-input: '1.22'
-          work-dir: apps/${{ inputs.service }}
+      # govulncheck was here. Removed because Dependabot already opens a
+      # PR for any Go module with a known CVE, and running on every CI
+      # run is duplicate effort that just slows feedback. Re-add if you
+      # want belt-and-suspenders.
 
       - name: Unit tests
         working-directory: apps/${{ inputs.service }}
