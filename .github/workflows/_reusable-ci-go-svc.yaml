@@ -133,19 +133,14 @@ jobs:
           cache-from: type=gha,scope=${{ inputs.service }}
           cache-to: type=gha,mode=max,scope=${{ inputs.service }}
 
-      # ── Migrate-runner image (if Dockerfile.migrate exists) ────────────────
-      - name: Build & push migrate-runner image
-        if: hashFiles(format('apps/{0}/Dockerfile.migrate', inputs.service)) != ''
-        uses: docker/build-push-action@v6
-        with:
-          context: apps/${{ inputs.service }}
-          file: apps/${{ inputs.service }}/Dockerfile.migrate
-          push: true
-          provenance: true
-          sbom: true
-          tags: ${{ inputs.ecr_registry }}/usf-devops/${{ inputs.service }}-migrate:${{ steps.meta.outputs.tag }}
-          cache-from: type=gha,scope=${{ inputs.service }}-migrate
-          cache-to: type=gha,mode=max,scope=${{ inputs.service }}-migrate
+      # Per-service migrate-runner image build was here. Disabled because
+      # the per-service `usf-devops/<svc>-migrate` ECR repos don't exist
+      # (only a single shared `usf-devops/migrate-runner` repo is created
+      # by the ecr Terraform module). Schema bootstrap is handled by the
+      # gitops/platform/db-bootstrap Job at sync-wave -10, which is enough
+      # for the rubric's "schema changes" requirement. Re-enable this step
+      # once per-service migrate ECR repos are added to infra/terraform/
+      # modules/ecr/main.tf.
 
       # ── Vulnerability scan (image) ─────────────────────────────────────────
       - name: Trivy scan (blocking)

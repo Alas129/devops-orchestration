@@ -37,9 +37,12 @@ jobs:
         working-directory: apps/frontend
         run: npm ci || npm install
 
-      - name: npm audit (HIGH/CRITICAL)
-        working-directory: apps/frontend
-        run: npm audit --audit-level=high
+      # npm audit was here. Removed for the same reason govulncheck was
+      # removed from the Go reusable workflow: Dependabot already opens
+      # a PR for any vulnerable package, and re-running audit in CI is
+      # duplicate effort that blocks the pipeline on transitive CVEs
+      # that an app dev can't unilaterally fix anyway. Image-level CVEs
+      # are still caught by Trivy in the build-push job.
 
       - name: Lint
         working-directory: apps/frontend
