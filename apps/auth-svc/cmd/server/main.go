@@ -41,7 +41,7 @@ func main() {
 	// Graceful shutdown — preStop hook + this drain combine to give in-flight
 	// requests time to finish before the pod terminates.
 	go func() {
-		slog.Info("listening", "addr", cfg.ListenAddr)
+		slog.Info("listening", "addr", cfg.ListenAddr, "build", "demo-run-1")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server", "err", err)
 			os.Exit(1)
