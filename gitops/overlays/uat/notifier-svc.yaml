@@ -1,18 +1,14 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/notifier-svc
-  tag: git-c840c7fde763   # promoted manually until next release-please RC tag fires
+  tag: git-030788f1b110
   digest: sha256:969a76db8cce2f94ab6dea823d7f66405fed9d1b1bd48e2c4a6ee0c23e17266d
-
 migration:
-  enabled: false   # per-service migrate-runner ECR repos not provisioned; rubric schema covered by gitops/platform/db-bootstrap Job
-
+  enabled: false
 ingress:
   enabled: true
   host: api.uat.calmloop.space
   pathPrefix: /api/v1/notifier
-
 serviceAccount:
   irsaRoleArn: arn:aws:iam::164856787183:role/usf-devops-nonprod-uat-notifier-svc
-
 externalSecret:
   enabled: false
