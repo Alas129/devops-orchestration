@@ -181,6 +181,17 @@ data "aws_iam_policy_document" "external_secrets" {
     ]
     resources = ["*"]
   }
+  # KMS decrypt is required to read AWS-managed-key encrypted secrets
+  # (RDS module writes its master secret with a CMK). Without this the
+  # rds-master ExternalSecret fails with "Access to KMS is not allowed".
+  statement {
+    effect = "Allow"
+    actions = [
+      "kms:Decrypt",
+      "kms:DescribeKey",
+    ]
+    resources = ["arn:aws:kms:${var.region}:*:key/*"]
+  }
 }
 
 resource "aws_iam_policy" "external_secrets" {
@@ -234,6 +245,35 @@ resource "kubectl_manifest" "ssm_cluster_secret_store" {
       provider = {
         aws = {
           service = "ParameterStore"
+          region  = var.region
+          auth = {
+            jwt = {
+              serviceAccountRef = {
+                name      = "external-secrets"
+                namespace = "external-secrets"
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+}
+
+# Second ClusterSecretStore for AWS Secrets Manager. The RDS module
+# stores its master credentials in SecretsManager (encrypted with a CMK),
+# and gitops/platform/db-bootstrap pulls them via this store.
+resource "kubectl_manifest" "secretsmanager_cluster_secret_store" {
+  depends_on = [helm_release.external_secrets]
+
+  yaml_body = yamlencode({
+    apiVersion = "external-secrets.io/v1beta1"
+    kind       = "ClusterSecretStore"
+    metadata   = { name = "aws-secretsmanager" }
+    spec = {
+      provider = {
+        aws = {
+          service = "SecretsManager"
           region  = var.region
           auth = {
             jwt = {

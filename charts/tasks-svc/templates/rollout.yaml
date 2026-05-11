@@ -88,6 +88,8 @@ spec:
               value: {{ .Values.config.dbUser | quote }}
             - name: DB_IAM_AUTH
               value: {{ .Values.config.useIamAuth | quote }}
+            - name: DB_SSL_MODE
+              value: {{ .Values.config.dbSslMode | default "verify-full" | quote }}
             - name: AWS_REGION
               value: {{ .Values.config.awsRegion | quote }}
             - name: JWT_ISSUER

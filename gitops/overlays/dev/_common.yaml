@@ -9,6 +9,10 @@ config:
   dbName: devops_dev
   dbUser: app_dev
   useIamAuth: true
+  # Demo: distroless image's CA bundle doesn't validate the RDS TLS chain
+  # cleanly for pgx, so use TLS-only (encryption without cert verify) until
+  # we ship the AWS RDS CA in the image. Per-env overrideable.
+  dbSslMode: require
   natsUrl: nats://nats.messaging.svc.cluster.local:4222
 
 ingress:

@@ -9,6 +9,7 @@ config:
   dbName: uatops_uat
   dbUser: app_uat
   useIamAuth: true
+  dbSslMode: require   # see dev/_common.yaml
   natsUrl: nats://nats.messaging.svc.cluster.local:4222
 
 ingress:

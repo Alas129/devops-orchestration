@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: db-bootstrap
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-11"
+spec:
+  project: nonprod
+  source:
+    repoURL: https://github.com/Alas129/devops-orchestration.git
+    targetRevision: main
+    path: gitops/platform/db-bootstrap
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: db-bootstrap
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

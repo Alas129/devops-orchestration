@@ -8,6 +8,7 @@ config:
   dbName: devops_qa
   dbUser: app_qa
   useIamAuth: true
+  dbSslMode: require   # see dev/_common.yaml
   natsUrl: nats://nats.messaging.svc.cluster.local:4222
 
 ingress:

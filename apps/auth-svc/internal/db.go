@@ -3,6 +3,7 @@ package authsvc
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -34,9 +35,19 @@ func newDBPool(ctx context.Context, cfg *Config) (*pgxpool.Pool, error) {
 		_ = aws.ToString
 	}
 
+	// sslmode defaults to verify-full but is overridable via DB_SSL_MODE.
+	// pgx delegates TLS verification to Go's crypto/tls which expects the
+	// system trust store; distroless static-debian12 ships ca-certificates,
+	// but the RDS chain isn't always picked up cleanly. Allowing the
+	// override lets us use `require` (encryption only) for clusters where
+	// we don't ship an explicit sslrootcert.
+	sslmode := os.Getenv("DB_SSL_MODE")
+	if sslmode == "" {
+		sslmode = "verify-full"
+	}
 	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=verify-full",
-		cfg.DBHost, cfg.DBPort, cfg.DBUser, password, cfg.DBName,
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		cfg.DBHost, cfg.DBPort, cfg.DBUser, password, cfg.DBName, sslmode,
 	)
 
 	pcfg, err := pgxpool.ParseConfig(dsn)

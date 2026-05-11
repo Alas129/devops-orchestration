@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -201,8 +202,12 @@ func newDBPool(ctx context.Context, cfg *Config) (*pgxpool.Pool, error) {
 		}
 		pwd = token
 	}
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=verify-full",
-		cfg.DBHost, cfg.DBPort, cfg.DBUser, pwd, cfg.DBName)
+	sslmode := os.Getenv("DB_SSL_MODE")
+	if sslmode == "" {
+		sslmode = "verify-full"
+	}
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		cfg.DBHost, cfg.DBPort, cfg.DBUser, pwd, cfg.DBName, sslmode)
 	pcfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
