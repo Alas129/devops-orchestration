@@ -112,6 +112,7 @@ jobs:
           TF_VAR_state_bucket: ${{ vars.TF_STATE_BUCKET }}
           TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
           TF_VAR_repository: ${{ github.repository }}
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           terraform plan -no-color -out=plan.bin -detailed-exitcode | tee plan.txt
         continue-on-error: true

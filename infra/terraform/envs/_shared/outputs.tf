@@ -1,11 +1,11 @@
-output "hosted_zone_id" {
-  description = "Route53 hosted zone ID, consumed by env modules for ACM + ExternalDNS"
-  value       = module.route53.zone_id
+output "cloudflare_zone_id" {
+  description = "Cloudflare zone ID, consumed by env modules for ACM validation + external-dns config."
+  value       = module.dns.zone_id
 }
 
 output "domain_name" {
-  description = "Apex domain"
-  value       = module.route53.name
+  description = "Apex domain (Cloudflare-hosted)."
+  value       = module.dns.name
 }
 
 output "ecr_repository_urls" {

@@ -17,9 +17,14 @@ variable "repository" {
 }
 
 variable "domain_name" {
-  description = "Apex domain hosted in Route53"
+  description = "Apex domain hosted in Cloudflare (e.g. calmloop.space)"
   type        = string
-  # Set in terraform.tfvars (kept out of VCS) or via TF_VAR_domain_name.
+}
+
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token scoped to Zone:Read + Zone:DNS:Edit on the apex zone. Set via TF_VAR_cloudflare_api_token — never commit."
+  type        = string
+  sensitive   = true
 }
 
 variable "service_names" {

@@ -11,6 +11,10 @@ provider "aws" {
   }
 }
 
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
+}
+
 data "terraform_remote_state" "shared" {
   backend = "s3"
   config = {

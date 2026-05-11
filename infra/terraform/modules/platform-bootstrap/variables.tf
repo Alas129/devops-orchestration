@@ -14,13 +14,15 @@ variable "oidc_provider_arn" {
   type = string
 }
 
-variable "hosted_zone_id" {
-  type = string
+variable "cloudflare_api_token" {
+  type        = string
+  sensitive   = true
+  description = "Scoped API token (Zone:Zone:Read + Zone:DNS:Edit on the calmloop.space zone). Read from TF_VAR_cloudflare_api_token."
 }
 
 variable "external_dns_domain_filters" {
   type        = list(string)
-  description = "DNS domains ExternalDNS is allowed to manage (e.g. ['dev.example.com', 'qa.example.com'])"
+  description = "DNS domains ExternalDNS is allowed to manage (e.g. ['dev.calmloop.space', 'qa.calmloop.space'])"
 }
 
 variable "lb_controller_chart_version" {

@@ -91,21 +91,45 @@ While `AWS_BOOTSTRAPPED` is unset / not equal to `'true'`:
 | `release-please`                  | runs                                          |
 | `nightly-qa`                      | runs (only edits files + git push)            |
 
+### One-time DNS setup (Cloudflare)
+
+The domain (`calmloop.space`) is registered at Namecheap with nameservers
+pointing at Cloudflare. ACM cert validation and per-env DNS records are
+written into the Cloudflare zone by Terraform / external-dns.
+
+1. Confirm the apex zone is added in Cloudflare (https://dash.cloudflare.com →
+   Websites → `calmloop.space`).
+2. Cloudflare → My Profile → API Tokens → Create Token → "Edit zone DNS"
+   template. Scope: include zone `calmloop.space`. Permissions:
+   - `Zone : Zone : Read`
+   - `Zone : DNS : Edit`
+   Save the token value (you only see it once). Export locally:
+
+   ```sh
+   export TF_VAR_cloudflare_api_token="<token from above>"
+   ```
+
+   And add it as a GitHub repo Secret named `CLOUDFLARE_API_TOKEN` so the
+   apply workflow can pass it through. (When `terraform-apply` runs, it
+   exports `TF_VAR_cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}`.)
+
 ### Bootstrap sequence (once, locally)
 
 ```sh
-# 1. State backend (creates S3 bucket + DynamoDB lock table)
+# 1. State backend (creates S3 bucket + DynamoDB lock table). Already done.
 cd infra/terraform/bootstrap
 terraform init && terraform apply
 TF_STATE_BUCKET=$(terraform output -raw state_bucket)
 
-# 2. _shared (Route53, ECR, GitHub OIDC trust, security-baseline)
+# 2. _shared (Cloudflare zone lookup, ECR, GitHub OIDC trust, security-baseline)
 cd ../envs/_shared
-echo "domain_name = \"<your-domain>\"" > terraform.tfvars
+cat > terraform.tfvars <<EOF
+domain_name = "calmloop.space"
+EOF
 terraform init -backend-config="bucket=$TF_STATE_BUCKET" \
                -backend-config="region=us-east-1" \
                -backend-config="dynamodb_table=usf-devops-tflock"
-terraform apply
+terraform apply       # requires $TF_VAR_cloudflare_api_token
 ECR_REGISTRY=$(terraform output -json ecr_repository_urls | jq -r '. | first(.[]) | sub("/[^/]+$";"")')
 TF_PLAN_ROLE_ARN=$(terraform output -raw gha_terraform_plan_role_arn)
 TF_APPLY_ROLE_ARN=$(terraform output -raw gha_terraform_role_arn)
@@ -113,15 +137,16 @@ ECR_PUSH_ROLE_ARN=$(terraform output -raw gha_ecr_push_role_arn)
 
 # 3. Configure repo Settings (Secrets and variables → Actions):
 #   Variables:
-#     AWS_BOOTSTRAPPED  = true
-#     TF_STATE_BUCKET   = $TF_STATE_BUCKET
-#     ECR_REGISTRY      = $ECR_REGISTRY
-#     DOMAIN_NAME       = <your-domain>
+#     AWS_BOOTSTRAPPED   = true
+#     TF_STATE_BUCKET    = $TF_STATE_BUCKET
+#     ECR_REGISTRY       = $ECR_REGISTRY
+#     DOMAIN_NAME        = calmloop.space
 #   Secrets:
-#     AWS_ROLE_TF_PLAN  = $TF_PLAN_ROLE_ARN
-#     AWS_ROLE_TF_APPLY = $TF_APPLY_ROLE_ARN
-#     AWS_ROLE_ECR_PUSH = $ECR_PUSH_ROLE_ARN
-#     GITOPS_BOT_TOKEN  = <PAT with repo:write>
+#     AWS_ROLE_TF_PLAN     = $TF_PLAN_ROLE_ARN
+#     AWS_ROLE_TF_APPLY    = $TF_APPLY_ROLE_ARN
+#     AWS_ROLE_ECR_PUSH    = $ECR_PUSH_ROLE_ARN
+#     GITOPS_BOT_TOKEN     = <PAT with repo:write>
+#     CLOUDFLARE_API_TOKEN = <token from "One-time DNS setup">
 #
 # 4. Create Environments _shared / nonprod / prod / prod-promote in repo
 #    Settings → Environments. Add required reviewers on prod and prod-promote.

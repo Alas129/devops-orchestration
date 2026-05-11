@@ -46,46 +46,35 @@ resource "helm_release" "aws_lb_controller" {
   })]
 }
 
-# ── ExternalDNS ────────────────────────────────────────────────────────────
-data "aws_iam_policy_document" "external_dns" {
-  statement {
-    effect    = "Allow"
-    actions   = ["route53:ChangeResourceRecordSets"]
-    resources = ["arn:aws:route53:::hostedzone/${var.hosted_zone_id}"]
-  }
-  statement {
-    effect = "Allow"
-    actions = [
-      "route53:ListHostedZones",
-      "route53:ListResourceRecordSets",
-      "route53:ListTagsForResource",
-    ]
-    resources = ["*"]
+# ── ExternalDNS (Cloudflare provider) ──────────────────────────────────────
+# We don't need IRSA because external-dns talks to the Cloudflare API, not to
+# AWS. The Cloudflare API token is mounted into the pod as an env var via a
+# K8s Secret created here from the var.cloudflare_api_token Terraform value.
+#
+# The token must be scoped to:
+#   - Zone:Zone:Read    (so external-dns can locate the zone)
+#   - Zone:DNS:Edit     (so it can create/update/delete records)
+# limited to the calmloop.space zone.
+
+resource "kubernetes_namespace" "external_dns" {
+  metadata {
+    name = "external-dns"
   }
 }
 
-resource "aws_iam_policy" "external_dns" {
-  name   = "${var.cluster_name}-external-dns"
-  policy = data.aws_iam_policy_document.external_dns.json
-}
-
-module "external_dns_irsa" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-  version = "~> 5.44"
-
-  role_name        = "${var.cluster_name}-external-dns"
-  role_policy_arns = { policy = aws_iam_policy.external_dns.arn }
-
-  oidc_providers = {
-    main = {
-      provider_arn               = var.oidc_provider_arn
-      namespace_service_accounts = ["kube-system:external-dns"]
-    }
+resource "kubernetes_secret" "cloudflare_api_token" {
+  metadata {
+    name      = "cloudflare-api-token"
+    namespace = kubernetes_namespace.external_dns.metadata[0].name
   }
+  data = {
+    apiToken = var.cloudflare_api_token
+  }
+  type = "Opaque"
 }
 
 resource "helm_release" "external_dns" {
-  namespace  = "kube-system"
+  namespace  = kubernetes_namespace.external_dns.metadata[0].name
   name       = "external-dns"
   repository = "https://kubernetes-sigs.github.io/external-dns/"
   chart      = "external-dns"
@@ -96,19 +85,31 @@ resource "helm_release" "external_dns" {
     serviceAccount = {
       create = true
       name   = "external-dns"
-      annotations = {
-        "eks.amazonaws.com/role-arn" = module.external_dns_irsa.iam_role_arn
+    }
+    provider = "cloudflare"
+    env = [
+      {
+        name = "CF_API_TOKEN"
+        valueFrom = {
+          secretKeyRef = {
+            name = kubernetes_secret.cloudflare_api_token.metadata[0].name
+            key  = "apiToken"
+          }
+        }
       }
-    }
-    provider = "aws"
-    aws = {
-      region   = var.region
-      zoneType = "public"
-    }
+    ]
     domainFilters = var.external_dns_domain_filters
     txtOwnerId    = var.cluster_name
-    policy        = "sync" # so deleting an Ingress removes the DNS record
-    sources       = ["service", "ingress"]
+    # `upsert-only` is safer than `sync` while we're proving the pipeline;
+    # flip to `sync` once we trust deletes propagate correctly.
+    policy  = "upsert-only"
+    sources = ["service", "ingress"]
+    cloudflare = {
+      # gray-cloud by default: records resolve straight to the ALB. Per-record
+      # `external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"` flips to
+      # orange cloud (Cloudflare CDN/WAF in front).
+      proxied = false
+    }
     tolerations = [
       { key = "CriticalAddonsOnly", operator = "Exists" }
     ]

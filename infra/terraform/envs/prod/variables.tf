@@ -32,6 +32,12 @@ variable "service_names" {
   default = ["auth-svc", "tasks-svc", "notifier-svc"]
 }
 
+variable "cloudflare_api_token" {
+  type        = string
+  sensitive   = true
+  description = "Cloudflare API token scoped to Zone:Read + Zone:DNS:Edit on the apex zone. TF_VAR_cloudflare_api_token."
+}
+
 variable "cosign_oidc_issuer" {
   type        = string
   description = "OIDC issuer used by cosign keyless signing — GitHub Actions fixed value"

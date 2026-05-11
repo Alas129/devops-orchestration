@@ -1,8 +1,8 @@
 locals {
-  cluster_name   = "${var.project}-nonprod"
-  shared         = data.terraform_remote_state.shared.outputs
-  domain_name    = local.shared.domain_name
-  hosted_zone_id = local.shared.hosted_zone_id
+  cluster_name       = "${var.project}-nonprod"
+  shared             = data.terraform_remote_state.shared.outputs
+  domain_name        = local.shared.domain_name
+  cloudflare_zone_id = local.shared.cloudflare_zone_id
 }
 
 # ── Network ────────────────────────────────────────────────────────────────
@@ -86,36 +86,36 @@ resource "postgresql_database" "env" {
 module "acm_dev" {
   source  = "../../modules/acm"
   fqdn    = "dev.${local.domain_name}"
-  zone_id = local.hosted_zone_id
+  zone_id = local.cloudflare_zone_id
 }
 
 module "acm_qa" {
   source  = "../../modules/acm"
   fqdn    = "qa.${local.domain_name}"
-  zone_id = local.hosted_zone_id
+  zone_id = local.cloudflare_zone_id
 }
 
 module "acm_uat" {
   source  = "../../modules/acm"
   fqdn    = "uat.${local.domain_name}"
-  zone_id = local.hosted_zone_id
+  zone_id = local.cloudflare_zone_id
 }
 
 # Cluster-level cert (Grafana, ArgoCD, etc.). Covers *.nonprod.<domain>.
 module "acm_cluster" {
   source  = "../../modules/acm"
   fqdn    = "nonprod.${local.domain_name}"
-  zone_id = local.hosted_zone_id
+  zone_id = local.cloudflare_zone_id
 }
 
 # ── Platform layer (LB Controller, ExternalDNS, Argo Rollouts, ESO, NATS) ──
 module "platform" {
-  source            = "../../modules/platform-bootstrap"
-  cluster_name      = module.eks.cluster_name
-  region            = var.region
-  vpc_id            = module.vpc.vpc_id
-  oidc_provider_arn = module.eks.oidc_provider_arn
-  hosted_zone_id    = local.hosted_zone_id
+  source               = "../../modules/platform-bootstrap"
+  cluster_name         = module.eks.cluster_name
+  region               = var.region
+  vpc_id               = module.vpc.vpc_id
+  oidc_provider_arn    = module.eks.oidc_provider_arn
+  cloudflare_api_token = var.cloudflare_api_token
   external_dns_domain_filters = [
     "dev.${local.domain_name}",
     "qa.${local.domain_name}",

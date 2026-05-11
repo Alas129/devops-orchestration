@@ -1,7 +1,9 @@
 output "certificate_arn" {
-  value = module.acm.acm_certificate_arn
+  description = "ARN of the validated ACM certificate."
+  value       = aws_acm_certificate_validation.this.certificate_arn
 }
 
 output "domain_name" {
-  value = module.acm.distinct_domain_names[0]
+  description = "Primary domain on the certificate."
+  value       = aws_acm_certificate.this.domain_name
 }

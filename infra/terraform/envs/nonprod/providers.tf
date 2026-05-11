@@ -11,6 +11,10 @@ provider "aws" {
   }
 }
 
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
+}
+
 # Pull shared outputs (Route53 zone, ECR ARNs, GitHub OIDC roles)
 data "terraform_remote_state" "shared" {
   backend = "s3"
