@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	authsvc "github.com/alusigmi/devops-orchestration/auth-svc/internal"
+	authsvc "github.com/Alas129/devops-orchestration/auth-svc/internal"
 )
 
 func main() {

@@ -1,4 +1,4 @@
-module github.com/alusigmi/devops-orchestration/auth-svc
+module github.com/Alas129/devops-orchestration/auth-svc
 
 go 1.22.0
 
