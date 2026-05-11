@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # for AWS OIDC (used by Slack notify to fetch webhook from SSM)
 
 jobs:
   smoke-and-promote:
@@ -18,10 +19,19 @@ jobs:
           ref: main
           token: ${{ secrets.GITOPS_BOT_TOKEN }}
 
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ECR_PUSH }}
+          aws-region: us-east-1
+
+      - name: Notify Slack — started
+        run: ./tools/slack-notify.sh START "nightly-qa · promoting dev → qa" "trigger: ${{ github.event_name }}"
+
       # In a real setup we'd run integration / k6 smoke against dev here.
       # For this scaffold we trust per-service CI tests + Argo Rollouts'
       # Prometheus analysis to gate; the nightly is just a scheduled promotion.
       - name: Copy dev tags into qa overlay
+        id: bump
         run: |
           set -e
           git config user.name "gitops-bot"
@@ -34,6 +44,8 @@ jobs:
               tag = dev.get("image", {}).get("tag")
               if tag and tag != "git-replaceme":
                   qa.setdefault("image", {})["tag"] = tag
+                  if "digest" in dev.get("image", {}):
+                      qa["image"]["digest"] = dev["image"]["digest"]
                   with open(f"gitops/overlays/qa/{svc}.yaml", "w") as f:
                       yaml.safe_dump(qa, f, sort_keys=False, default_flow_style=False)
           PY
@@ -41,4 +53,20 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "chore(qa): nightly promote from dev"
             git push origin main
+            echo "promoted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "promoted=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Notify Slack — success
+        if: success()
+        run: |
+          if [ "${{ steps.bump.outputs.promoted }}" = "true" ]; then
+            ./tools/slack-notify.sh SUCCESS "QA promoted from dev" "all 4 services bumped" "ArgoCD will reconcile within ~3min"
+          else
+            ./tools/slack-notify.sh SUCCESS "QA already in sync with dev" "no overlay change committed"
+          fi
+
+      - name: Notify Slack — failed
+        if: failure()
+        run: ./tools/slack-notify.sh FAIL "nightly-qa workflow FAILED" "see run for logs"

@@ -9,51 +9,125 @@ metadata:
   name: argocd-notifications-cm
   namespace: argocd
 data:
-  service.slack: |
-    token: $slack-token
+  # ─────────────────────────── service ───────────────────────────
+  # Slack incoming-webhook service. The Secret below provides
+  # `slack-webhook-url`; argocd-notifications posts JSON to it.
+  service.webhook.slack: |
+    url: $slack-webhook-url
+    headers:
+    - name: Content-Type
+      value: application/json
+
+  # ─────────────────────────── templates ─────────────────────────
+  # All templates write to one Slack channel via webhook; emoji + first-line
+  # prefix is the only way to distinguish event types at-a-glance.
+
+  template.app-sync-running: |
+    webhook:
+      slack:
+        method: POST
+        body: |
+          {
+            "text": ":hourglass_flowing_sand: *{{.app.metadata.name}}* — sync started",
+            "blocks": [
+              {"type":"section","text":{"type":"mrkdwn","text":":hourglass_flowing_sand: *Sync started* — `{{.app.metadata.name}}` → `{{.app.spec.destination.namespace}}`"}},
+              {"type":"context","elements":[
+                {"type":"mrkdwn","text":"revision: `{{.app.status.sync.revision | trunc 7}}`"},
+                {"type":"mrkdwn","text":"<{{.context.argocdUrl}}/applications/{{.app.metadata.name}}|open in ArgoCD>"}
+              ]}
+            ]
+          }
+
+  template.app-deployed: |
+    webhook:
+      slack:
+        method: POST
+        body: |
+          {
+            "text": ":white_check_mark: *{{.app.metadata.name}}* deployed to `{{.app.spec.destination.namespace}}`",
+            "blocks": [
+              {"type":"section","text":{"type":"mrkdwn","text":":white_check_mark: *Deployed* — `{{.app.metadata.name}}` → `{{.app.spec.destination.namespace}}`\nHealth: `{{.app.status.health.status}}` · Sync: `{{.app.status.sync.status}}`"}},
+              {"type":"context","elements":[
+                {"type":"mrkdwn","text":"revision: `{{.app.status.sync.revision | trunc 7}}`"},
+                {"type":"mrkdwn","text":"<{{.context.argocdUrl}}/applications/{{.app.metadata.name}}|view in ArgoCD>"}
+              ]}
+            ]
+          }
 
   template.app-sync-failed: |
-    message: |
-      :red_circle: *{{.app.metadata.name}}* sync to *{{.app.spec.destination.namespace}}* FAILED.
-      Revision: {{.app.status.sync.revision | trunc 7}}
-      Error: {{.app.status.operationState.message}}
-      <https://argocd.{{.context.argocdUrl}}/applications/{{.app.metadata.name}}|view in ArgoCD>
-
-  template.app-sync-status-unknown: |
-    message: |
-      :warning: *{{.app.metadata.name}}* status is UNKNOWN — check ArgoCD.
+    webhook:
+      slack:
+        method: POST
+        body: |
+          {
+            "text": ":x: *{{.app.metadata.name}}* sync to `{{.app.spec.destination.namespace}}` FAILED",
+            "blocks": [
+              {"type":"section","text":{"type":"mrkdwn","text":":x: *Sync FAILED* — `{{.app.metadata.name}}` → `{{.app.spec.destination.namespace}}`"}},
+              {"type":"section","text":{"type":"mrkdwn","text":"```{{.app.status.operationState.message}}```"}},
+              {"type":"context","elements":[
+                {"type":"mrkdwn","text":"revision: `{{.app.status.sync.revision | trunc 7}}`"},
+                {"type":"mrkdwn","text":"<{{.context.argocdUrl}}/applications/{{.app.metadata.name}}|investigate in ArgoCD>"}
+              ]}
+            ]
+          }
 
   template.app-health-degraded: |
-    message: |
-      :rotating_light: *{{.app.metadata.name}}* health DEGRADED.
-      Last sync: {{.app.status.sync.revision | trunc 7}}
-      <https://argocd.{{.context.argocdUrl}}/applications/{{.app.metadata.name}}|investigate>
+    webhook:
+      slack:
+        method: POST
+        body: |
+          {
+            "text": ":rotating_light: *{{.app.metadata.name}}* health DEGRADED",
+            "blocks": [
+              {"type":"section","text":{"type":"mrkdwn","text":":rotating_light: *Health DEGRADED* — `{{.app.metadata.name}}` in `{{.app.spec.destination.namespace}}`"}},
+              {"type":"context","elements":[
+                {"type":"mrkdwn","text":"last sync: `{{.app.status.sync.revision | trunc 7}}`"},
+                {"type":"mrkdwn","text":"<{{.context.argocdUrl}}/applications/{{.app.metadata.name}}|investigate>"}
+              ]}
+            ]
+          }
+
+  # ─────────────────────────── triggers ──────────────────────────
+  # `oncePer` ensures we don't spam — one notification per revision/state.
+
+  trigger.on-sync-running: |
+    - description: Application sync is in progress
+      oncePer: app.status.operationState.startedAt
+      send: [app-sync-running]
+      when: app.status.operationState.phase in ['Running']
+
+  trigger.on-deployed: |
+    - description: Application is synced + healthy after a sync
+      oncePer: app.status.sync.revision
+      send: [app-deployed]
+      when: app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
 
   trigger.on-sync-failed: |
     - description: Application sync failed
+      oncePer: app.status.operationState.startedAt
       send: [app-sync-failed]
       when: app.status.operationState.phase in ['Error', 'Failed']
-
-  trigger.on-sync-status-unknown: |
-    - description: Application sync status is unknown
-      send: [app-sync-status-unknown]
-      when: app.status.sync.status == 'Unknown'
 
   trigger.on-health-degraded: |
     - description: Application has degraded
       send: [app-health-degraded]
       when: app.status.health.status == 'Degraded'
 
+  # ─────────────────────────── subscriptions ─────────────────────
+  # Default subscriptions for every Application (overridable via per-app
+  # annotation). Per-app subscribe.* annotations ADD to this list.
+
   subscriptions: |
     - recipients:
         - slack:devops-alerts
       triggers:
+        - on-sync-running
+        - on-deployed
         - on-sync-failed
         - on-health-degraded
 ---
-# The actual Slack token is loaded by ExternalSecret from
-# SSM /devops/argocd/slack_webhook_url. Argo Notifications expects key
-# `slack-token` for the Bot OAuth token (or the legacy webhook URL).
+# The Slack incoming-webhook URL is loaded by ExternalSecret from
+# SSM /devops/argocd/slack_webhook_url.
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
 metadata:
@@ -68,6 +142,6 @@ spec:
     name: argocd-notifications-secret
     creationPolicy: Owner
   data:
-    - secretKey: slack-token
+    - secretKey: slack-webhook-url
       remoteRef:
         key: /devops/argocd/slack_webhook_url

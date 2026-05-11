@@ -39,6 +39,9 @@ jobs:
           aws-region: us-east-1
       - uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Notify Slack — started
+        run: ./tools/slack-notify.sh START "promote → UAT triggered by tag ${{ github.ref_name }}" "verifying cosign signatures on QA images..."
+
       - name: Read QA image refs + cosign verify
         env:
           REGISTRY: ${{ vars.ECR_REGISTRY }}
@@ -84,3 +87,11 @@ jobs:
             git commit -m "chore(uat): promote from QA via release tag ${RELEASE_TAG}"
             git push origin main
           fi
+
+      - name: Notify Slack — success
+        if: success()
+        run: ./tools/slack-notify.sh SUCCESS "UAT release ${{ github.ref_name }} deployed" "4/4 cosign signatures verified" "ArgoCD will reconcile UAT in ~30s"
+
+      - name: Notify Slack — failed
+        if: failure()
+        run: ./tools/slack-notify.sh FAIL "promote → UAT failed for ${{ github.ref_name }}" "see workflow run for details"
