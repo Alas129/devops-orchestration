@@ -3,8 +3,7 @@ image:
   tag: git-replaceme
 
 migration:
-  enabled: true
-  image: REPLACE_ECR_REGISTRY/usf-devops/auth-svc-migrate
+  enabled: false   # see dev overlay
 
 ingress:
   enabled: true

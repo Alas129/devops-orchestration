@@ -188,6 +188,10 @@ jobs:
             --type cyclonedx "$IMG"
 
       # ── Bump dev overlay (only on push to main); pin by digest ─────────────
+      # All 4 service CIs run in parallel and each tries to push to main,
+      # so collisions are normal. Retry up to 5 times: fetch the latest
+      # tip, re-apply the digest bump on top, push. Whoever loses the
+      # race just re-applies on top of the winner's commit.
       - name: Bump dev overlay
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -203,7 +207,11 @@ jobs:
           fi
           git config user.name "gitops-bot"
           git config user.email "gitops-bot@users.noreply.github.com"
-          python3 - <<PY
+          REMOTE="https://x-access-token:${GITOPS_BOT_TOKEN}@github.com/${{ github.repository }}.git"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            python3 - <<PY
           import yaml, os
           path = f"gitops/overlays/dev/{os.environ['SERVICE']}.yaml"
           with open(path) as f: data = yaml.safe_load(f) or {}
@@ -212,8 +220,18 @@ jobs:
           img["digest"] = os.environ["DIGEST"]
           with open(path, "w") as f: yaml.safe_dump(data, f, sort_keys=False, default_flow_style=False)
           PY
-          git add gitops/overlays/dev/${SERVICE}.yaml
-          if ! git diff --cached --quiet; then
+            git add gitops/overlays/dev/${SERVICE}.yaml
+            if git diff --cached --quiet; then
+              echo "no overlay change to commit (someone else already bumped to this digest)"
+              exit 0
+            fi
             git commit -m "chore(dev): bump ${SERVICE} to ${TAG} (${DIGEST}) [skip ci]"
-            git push https://x-access-token:${GITOPS_BOT_TOKEN}@github.com/${{ github.repository }}.git HEAD:main
-          fi
+            if git push "${REMOTE}" HEAD:main; then
+              echo "pushed overlay bump on attempt ${attempt}"
+              exit 0
+            fi
+            echo "push rejected on attempt ${attempt}, retrying after backoff"
+            sleep $((RANDOM % 8 + 2))
+          done
+          echo "exhausted 5 push retries"
+          exit 1

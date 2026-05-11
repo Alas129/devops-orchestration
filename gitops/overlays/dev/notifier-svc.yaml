@@ -3,8 +3,7 @@ image:
   tag: git-replaceme
 
 migration:
-  enabled: true
-  image: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/notifier-svc-migrate
+  enabled: false   # per-service migrate-runner ECR repos not provisioned; rubric schema covered by gitops/platform/db-bootstrap Job
 
 ingress:
   enabled: true
