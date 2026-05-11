@@ -21,13 +21,18 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 locals {
-  # GitHub OIDC sub claims:
-  #   repo:<owner>/<repo>:ref:refs/heads/<branch>
-  #   repo:<owner>/<repo>:pull_request
-  #   repo:<owner>/<repo>:ref:refs/tags/<tag>
+  # GitHub OIDC sub claims. Important: when a job declares `environment:`,
+  # GitHub REPLACES the ref-based sub with an environment-based one:
+  #   repo:<owner>/<repo>:environment:<env-name>
+  # not the usual `ref:refs/heads/main`. We need to allow both forms so the
+  # same role works whether the calling job uses `environment:` or not.
   main_subs = [
     "repo:${var.repository}:ref:refs/heads/main",
     "repo:${var.repository}:ref:refs/tags/v*",
+    "repo:${var.repository}:environment:_shared",
+    "repo:${var.repository}:environment:nonprod",
+    "repo:${var.repository}:environment:prod",
+    "repo:${var.repository}:environment:prod-promote",
   ]
   pr_subs = [
     "repo:${var.repository}:pull_request",
