@@ -1,18 +1,15 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/notifier-svc
-  tag: git-replaceme
-
+  tag: git-296fbb628353
+  digest: sha256:d972c13d856850de895a97c4ebc60d1fa06ef223d0b19155229e8df6d88deb7c
 migration:
   enabled: true
   image: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/notifier-svc-migrate
-
 ingress:
   enabled: true
   host: api.dev.calmloop.space
   pathPrefix: /api/v1/notifier
-
 serviceAccount:
   irsaRoleArn: arn:aws:iam::164856787183:role/usf-devops-nonprod-dev-notifier-svc
-
 externalSecret:
   enabled: false
