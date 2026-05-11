@@ -39,6 +39,8 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ECR_PUSH }}
           aws-region: us-east-1
       - name: Notify Slack — awaiting reviewer approval
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           ./tools/slack-notify.sh APPROVAL "promote to PROD ${{ github.ref_name }} awaiting approval" "approve at ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
@@ -64,6 +66,8 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
 
       - name: Notify Slack — production promote started
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           ./tools/slack-notify.sh START "promote to PROD triggered by tag ${{ github.ref_name }}" "human approval gate passed; verifying UAT image signatures..."
 
@@ -115,10 +119,14 @@ jobs:
 
       - name: Notify Slack — production released
         if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           ./tools/slack-notify.sh SUCCESS ":tada: PRODUCTION release ${{ github.ref_name }} deployed" "4/4 cosign signatures verified" "Kyverno verifyImages will enforce at admission" "ArgoCD prod will reconcile in ~30s"
 
       - name: Notify Slack — failed
         if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           ./tools/slack-notify.sh FAIL "promote to PROD failed for ${{ github.ref_name }}" "see workflow run for details"

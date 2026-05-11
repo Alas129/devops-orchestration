@@ -24,12 +24,21 @@ case "$STATE" in
   *) echo "unknown STATE: $STATE (use START|SUCCESS|APPROVAL|FAIL)" >&2 ; exit 2 ;;
 esac
 
-WEBHOOK_URL=$(aws ssm get-parameter \
-  --name /devops/argocd/slack_webhook_url \
-  --with-decryption --region us-east-1 \
-  --query Parameter.Value --output text 2>/dev/null || echo "")
-if [[ -z "$WEBHOOK_URL" || "$WEBHOOK_URL" == "None" ]]; then
-  echo "WARN: slack webhook URL not in SSM at /devops/argocd/slack_webhook_url — skipping notify" >&2
+# Webhook lookup order:
+#   1. SLACK_WEBHOOK_URL env var (recommended: set as GitHub repo secret —
+#      avoids granting the workflow's IAM role ssm:GetParameter)
+#   2. SSM Parameter Store at /devops/argocd/slack_webhook_url (used by
+#      ArgoCD's ExternalSecret too; requires ssm:GetParameter + kms:Decrypt)
+WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
+if [[ -z "$WEBHOOK_URL" ]]; then
+  WEBHOOK_URL=$(aws ssm get-parameter \
+    --name /devops/argocd/slack_webhook_url \
+    --with-decryption --region us-east-1 \
+    --query Parameter.Value --output text 2>/dev/null || echo "")
+fi
+# Reject obvious non-URL placeholders so we don't silently noop in prod.
+if [[ -z "$WEBHOOK_URL" || "$WEBHOOK_URL" == "None" || "$WEBHOOK_URL" == "placeholder" || "$WEBHOOK_URL" != https://hooks.slack.com/* ]]; then
+  echo "WARN: no valid Slack webhook URL (env SLACK_WEBHOOK_URL or SSM /devops/argocd/slack_webhook_url) — skipping notify" >&2
   exit 0   # don't fail the workflow on missing webhook
 fi
 

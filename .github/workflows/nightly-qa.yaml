@@ -25,6 +25,8 @@ jobs:
           aws-region: us-east-1
 
       - name: Notify Slack — started
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           ./tools/slack-notify.sh START "nightly-qa · promoting dev to qa" "trigger - ${{ github.event_name }}"
 
@@ -61,6 +63,8 @@ jobs:
 
       - name: Notify Slack — success
         if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           if [ "${{ steps.bump.outputs.promoted }}" = "true" ]; then
             ./tools/slack-notify.sh SUCCESS "QA promoted from dev" "all 4 services bumped" "ArgoCD will reconcile within ~3min"
@@ -70,5 +74,7 @@ jobs:
 
       - name: Notify Slack — failed
         if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           ./tools/slack-notify.sh FAIL "nightly-qa workflow FAILED" "see run for logs"
