@@ -2,6 +2,7 @@ env: dev
 image:
   repository: ""
   tag: "git-replaceme"
+  digest: ""
   pullPolicy: IfNotPresent
 
 replicaCount: 2
@@ -15,6 +16,7 @@ ingress:
   className: alb
   host: app.dev.example.com
   certificateArn: ""
+  wafAclArn: ""
 
 serviceAccount:
   create: true
@@ -24,8 +26,20 @@ resources:
   requests: { cpu: 100m, memory: 256Mi }
   limits:   { memory: 512Mi }
 
+# Frontend image runs as the `app` user from its Dockerfile (USER app); we
+# only assert non-root + seccomp here and let the image dictate the UID.
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
 probes:
-  readiness: { path: /api/healthz, initialDelaySeconds: 5, periodSeconds: 5 }
+  startup:
+    enabled: true
+    path: /api/healthz
+    failureThreshold: 30
+    periodSeconds: 5
+  readiness: { path: /api/healthz, initialDelaySeconds: 0, periodSeconds: 5 }
   liveness:  { path: /api/healthz, initialDelaySeconds: 15, periodSeconds: 10 }
 
 hpa:
@@ -33,16 +47,22 @@ hpa:
   min: 2
   max: 6
   cpuTarget: 70
+  memoryTarget: 75
 
 pdb:
   enabled: true
-  minAvailable: 1
+  maxUnavailable: 0
 
 # Blue/green: keep the previous ReplicaSet warm for 5 min after switch.
 # An ALB target group flip is the only "deploy" event clients see.
 blueGreen:
   scaleDownDelaySeconds: 300
   autoPromotionEnabled: true
+
+priorityClassName: ""
+topologySpread:
+  enabled: true
+  maxSkew: 1
 
 config:
   authApiUrl: http://auth-svc.app.svc.cluster.local:8080
@@ -52,3 +72,8 @@ config:
 monitoring:
   serviceMonitor:
     enabled: false                # Next.js doesn't expose prom metrics by default
+
+networkPolicy:
+  enabled: true
+  # ports backend services listen on; allowed for egress from frontend pods.
+  backendPort: 8080
