@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
@@ -208,5 +209,25 @@ func newDBPool(ctx context.Context, cfg *Config) (*pgxpool.Pool, error) {
 	}
 	pcfg.MaxConns = 10
 	pcfg.MinConns = 2
+	// IAM auth tokens expire after 15 minutes; force the pool to recycle
+	// connections within that window so each new conn picks up a fresh token
+	// via BeforeConnect.
+	pcfg.MaxConnLifetime = 10 * time.Minute
+	pcfg.HealthCheckPeriod = 30 * time.Second
+
+	if cfg.UseIAMAuth {
+		pcfg.BeforeConnect = func(ctx context.Context, c *pgx.ConnConfig) error {
+			awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.AWSRegion))
+			if err != nil {
+				return fmt.Errorf("aws config: %w", err)
+			}
+			token, err := auth.BuildAuthToken(ctx, fmt.Sprintf("%s:%s", cfg.DBHost, cfg.DBPort), cfg.AWSRegion, cfg.DBUser, awsCfg.Credentials)
+			if err != nil {
+				return fmt.Errorf("rotate iam token: %w", err)
+			}
+			c.Password = token
+			return nil
+		}
+	}
 	return pgxpool.NewWithConfig(ctx, pcfg)
 }
