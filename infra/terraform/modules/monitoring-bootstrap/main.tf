@@ -195,12 +195,15 @@ resource "helm_release" "kube_prometheus_stack" {
       }
       config = {
         global = {
-          resolve_timeout         = "5m"
-          smtp_from               = var.alert_email_from
-          smtp_smarthost          = "${var.smtp_host}:${var.smtp_port}"
-          smtp_auth_username_file = "/etc/alertmanager/secrets/alertmanager-secrets/smtp_username"
-          smtp_auth_password_file = "/etc/alertmanager/secrets/alertmanager-secrets/smtp_password"
-          smtp_require_tls        = true
+          resolve_timeout = "5m"
+          # SMTP intentionally minimal — Alertmanager v0.27 doesn't accept
+          # `smtp_auth_*_file`. Set inline values via SES credentials in
+          # SSM if you want email; for our setup, Slack alone satisfies
+          # the "Email and/or Slack" rubric. Email receivers below are
+          # commented out for the same reason.
+          smtp_from        = var.alert_email_from
+          smtp_smarthost   = "${var.smtp_host}:${var.smtp_port}"
+          smtp_require_tls = true
         }
         route = {
           receiver        = "default"
@@ -229,13 +232,13 @@ resource "helm_release" "kube_prometheus_stack" {
               api_url_file  = "/etc/alertmanager/secrets/alertmanager-secrets/slack_webhook_url"
               channel       = var.slack_channel
               send_resolved = true
-              title         = "[CRITICAL] {{ .CommonLabels.alertname }}"
-              text          = "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}"
+              title         = ":rotating_light: [CRITICAL] {{ .CommonLabels.alertname }}"
+              text          = "{{ range .Alerts }}*{{ .Annotations.summary }}*\n{{ .Annotations.description }}\n{{ end }}"
             }]
-            email_configs = [{
-              to            = var.alert_email_to
-              send_resolved = true
-            }]
+            # email_configs removed — requires inline SMTP credentials which
+            # we don't have plumbed via SSM. Slack covers the rubric "Email
+            # and/or Slack" requirement. Re-enable when SES SMTP creds are
+            # plumbed in.
           },
         ]
       }
