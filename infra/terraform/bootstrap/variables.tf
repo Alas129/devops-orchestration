@@ -13,5 +13,5 @@ variable "region" {
 variable "repository" {
   description = "Source repository (org/name) — recorded in default tags"
   type        = string
-  default     = "alusigmi/devops-orchestration"
+  default     = "Alas129/devops-orchestration"
 }
