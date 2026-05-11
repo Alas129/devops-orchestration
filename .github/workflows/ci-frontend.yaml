@@ -83,7 +83,7 @@ jobs:
 
       - name: Build & push image
         id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: apps/frontend
           push: true
