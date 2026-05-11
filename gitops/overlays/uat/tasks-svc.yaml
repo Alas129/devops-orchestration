@@ -1,19 +1,15 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/tasks-svc
-  tag: git-c840c7fde763   # promoted manually until next release-please RC tag fires
+  tag: git-030788f1b110
   digest: sha256:d15ab59a06fa36c45c86bcfc226de1486df5994b77d1b2a7b4fe0e18dc781ae4
-
 migration:
-  enabled: false   # per-service migrate-runner ECR repos not provisioned; rubric schema covered by gitops/platform/db-bootstrap Job
-
+  enabled: false
 ingress:
   enabled: true
   host: api.uat.calmloop.space
   pathPrefix: /api/v1/tasks
-
 serviceAccount:
   irsaRoleArn: arn:aws:iam::164856787183:role/usf-devops-nonprod-uat-tasks-svc
-
 externalSecret:
   enabled: true
   jwtSsmPath: /devops/auth-svc/jwt-secret
