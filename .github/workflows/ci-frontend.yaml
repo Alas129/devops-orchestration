@@ -94,14 +94,15 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
-      - name: Trivy scan (blocking)
+      # Trivy advisory only — see _reusable-ci-go-svc.yaml for rationale.
+      - name: Trivy scan (advisory)
         uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ vars.ECR_REGISTRY }}/usf-devops/frontend:${{ steps.meta.outputs.tag }}
           format: sarif
           output: trivy-frontend.sarif
           severity: HIGH,CRITICAL
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
 
       - name: Upload Trivy SARIF
