@@ -70,6 +70,10 @@ jobs:
 
   plan:
     name: plan ${{ matrix.env }}
+    # Gated on AWS bootstrap: until the state bucket exists and the OIDC
+    # plan role is created, this job has nothing to talk to and will
+    # always fail in 5 seconds. static-checks above still runs every PR.
+    if: ${{ vars.AWS_BOOTSTRAPPED == 'true' }}
     needs: static-checks
     runs-on: ubuntu-22.04
     strategy:

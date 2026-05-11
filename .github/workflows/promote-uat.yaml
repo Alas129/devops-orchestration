@@ -17,6 +17,8 @@ permissions:
 jobs:
   verify:
     name: cosign verify
+    # Skip until ECR exists and images are actually being pushed.
+    if: ${{ vars.AWS_BOOTSTRAPPED == 'true' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:

@@ -19,24 +19,13 @@ permissions:
   security-events: write
 
 jobs:
-  build:
+  quality:
+    name: quality (lint/audit/build)
     runs-on: ubuntu-22.04
-    timeout-minutes: 25
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tag }}
-      image_digest: ${{ steps.push.outputs.digest }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-
-      - name: Compute tag
-        id: meta
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=git-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
-          fi
 
       - uses: actions/setup-node@v4
         with:
@@ -59,6 +48,28 @@ jobs:
       - name: Build
         working-directory: apps/frontend
         run: npm run build
+
+  build-push:
+    name: build & push (gated on AWS bootstrap)
+    needs: quality
+    if: ${{ vars.AWS_BOOTSTRAPPED == 'true' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+      image_digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Compute tag
+        id: meta
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=git-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: docker/setup-buildx-action@v3
       - uses: aws-actions/configure-aws-credentials@v4

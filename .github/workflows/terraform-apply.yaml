@@ -22,6 +22,10 @@ permissions:
 # the apply step block until a reviewer approves in the Actions UI.
 jobs:
   apply:
+    # Gated on AWS bootstrap. Set repo Variable AWS_BOOTSTRAPPED=true after
+    # the bootstrap module has created the state backend, OIDC roles, and
+    # repo Variables/Secrets are populated.
+    if: ${{ vars.AWS_BOOTSTRAPPED == 'true' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     strategy:

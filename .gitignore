@@ -44,3 +44,6 @@ vendor/
 
 # Local kubeconfigs
 kubeconfig*
+
+# Local validation render output (helm template + kubeconform)
+.render/

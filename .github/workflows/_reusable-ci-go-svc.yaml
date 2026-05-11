@@ -3,6 +3,12 @@ name: _reusable CI for a Go microservice
 # Reusable: builds, tests, scans, signs, and pushes both the service image
 # and its sibling migrate-runner image to ECR. Caller workflows only specify
 # the service short name; everything else is identical across services.
+#
+# Two jobs:
+#   - quality:     vet, SAST, vuln scan, unit tests, coverage. Always runs.
+#   - build-push:  docker build + ECR push + cosign + SBOM + overlay bump.
+#                  Gated on `vars.AWS_BOOTSTRAPPED == 'true'` so PRs/pushes
+#                  before AWS bootstrap don't fail with credential errors.
 
 on:
   workflow_call:
@@ -17,7 +23,7 @@ on:
         description: "Account-scoped ECR registry, e.g. <id>.dkr.ecr.us-east-1.amazonaws.com"
     secrets:
       AWS_ROLE_ECR_PUSH:
-        required: true
+        required: false
       GITOPS_BOT_TOKEN:
         required: false
 
@@ -28,26 +34,14 @@ permissions:
   pull-requests: read
 
 jobs:
-  build:
-    name: build & push
+  quality:
+    name: quality (vet/sast/test)
     runs-on: ubuntu-22.04
-    timeout-minutes: 25
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tag }}
-      image_digest: ${{ steps.push.outputs.digest }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Compute image tag
-        id: meta
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=git-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
-          fi
 
       - uses: actions/setup-go@v5
         with:
@@ -61,7 +55,6 @@ jobs:
           go mod download
           go vet ./...
 
-      # ── Static analysis (SAST) ─────────────────────────────────────────────
       - name: gosec
         uses: securego/gosec@v2.21.4
         with:
@@ -80,7 +73,6 @@ jobs:
           go-version-input: '1.22'
           work-dir: apps/${{ inputs.service }}
 
-      # ── Tests ──────────────────────────────────────────────────────────────
       - name: Unit tests
         working-directory: apps/${{ inputs.service }}
         run: go test ./... -race -count=1 -timeout 120s -coverprofile=coverage.out
@@ -92,6 +84,31 @@ jobs:
           name: coverage-${{ inputs.service }}-${{ github.sha }}
           path: apps/${{ inputs.service }}/coverage.out
           retention-days: 7
+
+  build-push:
+    name: build & push (gated on AWS bootstrap)
+    needs: quality
+    # Skip everything that needs ECR / OIDC role until the AWS bootstrap is
+    # finished and the `AWS_BOOTSTRAPPED` repo variable is set to 'true'.
+    if: ${{ vars.AWS_BOOTSTRAPPED == 'true' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+      image_digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute image tag
+        id: meta
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=git-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
