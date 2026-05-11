@@ -13,3 +13,9 @@ variable "retain_count" {
   type        = number
   default     = 30
 }
+
+variable "replication_destination_regions" {
+  description = "Additional regions to replicate every image to (DR). Empty = no replication."
+  type        = list(string)
+  default     = []
+}

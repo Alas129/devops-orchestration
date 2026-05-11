@@ -36,13 +36,13 @@ resource "helm_release" "argocd" {
       }
       rbac = {
         "policy.default" = "role:readonly"
-        "policy.csv" = <<-EOT
+        "policy.csv"     = <<-EOT
           g, ${var.admin_github_org}:admins, role:admin
         EOT
       }
     }
     server = {
-      ingress = { enabled = false } # we manage Ingress separately below
+      ingress   = { enabled = false } # we manage Ingress separately below
       extraArgs = ["--insecure"]
     }
     repoServer = {
@@ -60,15 +60,15 @@ resource "kubernetes_ingress_v1" "argocd" {
     name      = "argocd-server"
     namespace = "argocd"
     annotations = {
-      "kubernetes.io/ingress.class"                  = "alb"
-      "alb.ingress.kubernetes.io/scheme"             = "internet-facing"
-      "alb.ingress.kubernetes.io/target-type"        = "ip"
-      "alb.ingress.kubernetes.io/listen-ports"       = jsonencode([{ HTTPS = 443 }])
-      "alb.ingress.kubernetes.io/certificate-arn"    = var.certificate_arn
-      "alb.ingress.kubernetes.io/ssl-policy"         = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-      "alb.ingress.kubernetes.io/backend-protocol"   = "HTTP"
-      "alb.ingress.kubernetes.io/healthcheck-path"   = "/healthz"
-      "external-dns.alpha.kubernetes.io/hostname"    = "argocd.${var.subdomain}.${var.domain_name}"
+      "kubernetes.io/ingress.class"                = "alb"
+      "alb.ingress.kubernetes.io/scheme"           = "internet-facing"
+      "alb.ingress.kubernetes.io/target-type"      = "ip"
+      "alb.ingress.kubernetes.io/listen-ports"     = jsonencode([{ HTTPS = 443 }])
+      "alb.ingress.kubernetes.io/certificate-arn"  = var.certificate_arn
+      "alb.ingress.kubernetes.io/ssl-policy"       = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+      "alb.ingress.kubernetes.io/backend-protocol" = "HTTP"
+      "alb.ingress.kubernetes.io/healthcheck-path" = "/healthz"
+      "external-dns.alpha.kubernetes.io/hostname"  = "argocd.${var.subdomain}.${var.domain_name}"
     }
   }
 
@@ -99,8 +99,8 @@ resource "kubectl_manifest" "root_app_of_apps" {
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata = {
-      name      = "root"
-      namespace = "argocd"
+      name       = "root"
+      namespace  = "argocd"
       finalizers = ["resources-finalizer.argocd.argoproj.io"]
     }
     spec = {

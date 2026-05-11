@@ -102,13 +102,13 @@ resource "helm_release" "external_dns" {
     }
     provider = "aws"
     aws = {
-      region = var.region
+      region   = var.region
       zoneType = "public"
     }
     domainFilters = var.external_dns_domain_filters
     txtOwnerId    = var.cluster_name
     policy        = "sync" # so deleting an Ingress removes the DNS record
-    sources = ["service", "ingress"]
+    sources       = ["service", "ingress"]
     tolerations = [
       { key = "CriticalAddonsOnly", operator = "Exists" }
     ]

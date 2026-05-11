@@ -37,6 +37,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
     id     = "expire-old-logs"
     status = "Enabled"
 
+    # Apply to every object; the empty filter is required by the AWS provider.
+    filter {}
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"

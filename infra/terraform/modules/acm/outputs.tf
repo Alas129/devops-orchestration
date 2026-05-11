@@ -3,5 +3,5 @@ output "certificate_arn" {
 }
 
 output "domain_name" {
-  value = module.acm.acm_certificate_domain_name
+  value = module.acm.distinct_domain_names[0]
 }

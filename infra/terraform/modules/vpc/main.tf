@@ -40,12 +40,12 @@ module "vpc" {
   # Tags required by AWS Load Balancer Controller and Karpenter for
   # subnet auto-discovery.
   public_subnet_tags = {
-    "kubernetes.io/role/elb"                          = "1"
-    "kubernetes.io/cluster/${var.cluster_name}"       = "shared"
+    "kubernetes.io/role/elb"                    = "1"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
   private_subnet_tags = {
-    "kubernetes.io/role/internal-elb"                 = "1"
-    "kubernetes.io/cluster/${var.cluster_name}"       = "shared"
-    "karpenter.sh/discovery"                          = var.cluster_name
+    "kubernetes.io/role/internal-elb"           = "1"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "karpenter.sh/discovery"                    = var.cluster_name
   }
 }

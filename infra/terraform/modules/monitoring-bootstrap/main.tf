@@ -27,7 +27,7 @@ resource "kubectl_manifest" "grafana_github_oauth_external_secret" {
         creationPolicy = "Owner"
       }
       data = [
-        { secretKey = "client_id",     remoteRef = { key = "/devops/grafana/github/client_id" } },
+        { secretKey = "client_id", remoteRef = { key = "/devops/grafana/github/client_id" } },
         { secretKey = "client_secret", remoteRef = { key = "/devops/grafana/github/client_secret" } },
       ]
     }
@@ -54,8 +54,8 @@ resource "kubectl_manifest" "alertmanager_secrets_external_secret" {
       }
       data = [
         { secretKey = "slack_webhook_url", remoteRef = { key = "/devops/alertmanager/slack_webhook_url" } },
-        { secretKey = "smtp_username",     remoteRef = { key = "/devops/alertmanager/smtp_username" } },
-        { secretKey = "smtp_password",     remoteRef = { key = "/devops/alertmanager/smtp_password" } },
+        { secretKey = "smtp_username", remoteRef = { key = "/devops/alertmanager/smtp_username" } },
+        { secretKey = "smtp_password", remoteRef = { key = "/devops/alertmanager/smtp_password" } },
       ]
     }
   })
@@ -80,19 +80,19 @@ resource "helm_release" "kube_prometheus_stack" {
     crds = { enabled = true }
 
     grafana = {
-      adminUser     = "admin"
-      adminPassword = "" # we disable the admin login below
+      adminUser                 = "admin"
+      adminPassword             = "" # we disable the admin login below
       defaultDashboardsTimezone = "browser"
 
       "grafana.ini" = {
         server = {
-          root_url = "https://grafana.${var.subdomain}.${var.domain_name}"
+          root_url            = "https://grafana.${var.subdomain}.${var.domain_name}"
           serve_from_sub_path = false
         }
         auth = {
-          disable_login_form     = true
-          disable_signout_menu   = false
-          oauth_auto_login       = true
+          disable_login_form                = true
+          disable_signout_menu              = false
+          oauth_auto_login                  = true
           oauth_allow_insecure_email_lookup = false
         }
         "auth.basic" = {
@@ -146,7 +146,7 @@ resource "helm_release" "kube_prometheus_stack" {
       }
 
       sidecar = {
-        dashboards = { enabled = true, label = "grafana_dashboard" }
+        dashboards  = { enabled = true, label = "grafana_dashboard" }
         datasources = { enabled = true, label = "grafana_datasource" }
       }
 
@@ -167,8 +167,8 @@ resource "helm_release" "kube_prometheus_stack" {
         storageSpec = {
           volumeClaimTemplate = {
             spec = {
-              accessModes = ["ReadWriteOnce"]
-              resources = { requests = { storage = "30Gi" } }
+              accessModes      = ["ReadWriteOnce"]
+              resources        = { requests = { storage = "30Gi" } }
               storageClassName = "gp3"
             }
           }
@@ -186,9 +186,9 @@ resource "helm_release" "kube_prometheus_stack" {
       }
       config = {
         global = {
-          resolve_timeout = "5m"
-          smtp_from       = var.alert_email_from
-          smtp_smarthost  = "${var.smtp_host}:${var.smtp_port}"
+          resolve_timeout         = "5m"
+          smtp_from               = var.alert_email_from
+          smtp_smarthost          = "${var.smtp_host}:${var.smtp_port}"
           smtp_auth_username_file = "/etc/alertmanager/secrets/alertmanager-secrets/smtp_username"
           smtp_auth_password_file = "/etc/alertmanager/secrets/alertmanager-secrets/smtp_password"
           smtp_require_tls        = true
@@ -207,21 +207,21 @@ resource "helm_release" "kube_prometheus_stack" {
           {
             name = "default"
             slack_configs = [{
-              api_url_file = "/etc/alertmanager/secrets/alertmanager-secrets/slack_webhook_url"
-              channel      = var.slack_channel
+              api_url_file  = "/etc/alertmanager/secrets/alertmanager-secrets/slack_webhook_url"
+              channel       = var.slack_channel
               send_resolved = true
-              title        = "{{ .CommonLabels.alertname }}"
-              text         = "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}"
+              title         = "{{ .CommonLabels.alertname }}"
+              text          = "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}"
             }]
           },
           {
             name = "critical"
             slack_configs = [{
-              api_url_file = "/etc/alertmanager/secrets/alertmanager-secrets/slack_webhook_url"
-              channel      = var.slack_channel
+              api_url_file  = "/etc/alertmanager/secrets/alertmanager-secrets/slack_webhook_url"
+              channel       = var.slack_channel
               send_resolved = true
-              title        = "[CRITICAL] {{ .CommonLabels.alertname }}"
-              text         = "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}"
+              title         = "[CRITICAL] {{ .CommonLabels.alertname }}"
+              text          = "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}"
             }]
             email_configs = [{
               to            = var.alert_email_to
@@ -232,7 +232,7 @@ resource "helm_release" "kube_prometheus_stack" {
       }
     }
 
-    nodeExporter = { enabled = true }
+    nodeExporter     = { enabled = true }
     kubeStateMetrics = { enabled = true }
   })]
 }
@@ -253,8 +253,8 @@ resource "helm_release" "loki_stack" {
     loki = {
       enabled = true
       persistence = {
-        enabled      = true
-        size         = "20Gi"
+        enabled          = true
+        size             = "20Gi"
         storageClassName = "gp3"
       }
       config = {

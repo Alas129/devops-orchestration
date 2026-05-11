@@ -4,7 +4,7 @@ variable "project" {
 }
 
 variable "repository" {
-  description = "GitHub repo identifier in 'owner/name' form (e.g. 'alusigmi/devops-orchestration')"
+  description = "GitHub repo identifier in 'owner/name' form (e.g. 'Alas129/devops-orchestration')"
   type        = string
 }
 
