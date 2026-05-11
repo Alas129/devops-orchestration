@@ -1,6 +1,6 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/frontend
-  tag: git-6684116bd2e4
+  tag: git-c4d33c4b2a9c
   digest: sha256:82da2c03b013f064b68e9a026e3441ede15f3f7d4598228a322c1a0259a6dca5
 ingress:
   enabled: true
