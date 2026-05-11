@@ -11,6 +11,8 @@ on:
     paths:
       - 'charts/**'
       - 'gitops/overlays/**'
+      - '.github/workflows/chart-validate.yaml'
+  workflow_dispatch:
 
 permissions:
   contents: read
