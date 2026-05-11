@@ -31,7 +31,8 @@ output "service_irsa_role_arns" {
 }
 
 output "current_bottlerocket_ami_id" {
-  value = module.karpenter.current_bottlerocket_ami_id
+  value     = module.karpenter.current_bottlerocket_ami_id
+  sensitive = true
 }
 
 output "argocd_url" {

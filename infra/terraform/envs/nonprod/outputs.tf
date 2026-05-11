@@ -43,6 +43,9 @@ output "kubeconfig_command" {
 output "current_bottlerocket_ami_id" {
   description = "AMI Karpenter is currently provisioning. Bumps trigger drift."
   value       = module.karpenter.current_bottlerocket_ami_id
+  # Marked sensitive because the upstream SSM Parameter data source flags the
+  # value as sensitive; Terraform requires propagation.
+  sensitive = true
 }
 
 output "argocd_url" {

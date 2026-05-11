@@ -18,6 +18,10 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Default GITHUB_TOKEN cannot create PRs unless the repo opts in
+          # under Settings → Actions → General → "Allow GitHub Actions to
+          # create and approve pull requests". Using GITOPS_BOT_TOKEN (a PAT
+          # with pull_requests:write) bypasses that policy switch.
+          token: ${{ secrets.GITOPS_BOT_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
