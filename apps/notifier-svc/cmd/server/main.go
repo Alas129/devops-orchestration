@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	notifier "github.com/alusigmi/devops-orchestration/notifier-svc/internal"
+	notifier "github.com/Alas129/devops-orchestration/notifier-svc/internal"
 )
 
 func main() {
