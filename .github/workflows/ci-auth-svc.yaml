@@ -14,6 +14,15 @@ on:
       - 'charts/auth-svc/**'
   workflow_dispatch:
 
+# Mirror the permissions block from the reusable workflow. Reusable workflows
+# can only narrow caller permissions, not grant new ones — without this, the
+# called workflow fails to start with "Permission is not granted".
+permissions:
+  id-token: write
+  contents: write
+  security-events: write
+  pull-requests: read
+
 jobs:
   ci:
     uses: ./.github/workflows/_reusable-ci-go-svc.yaml
