@@ -1,10 +1,10 @@
 image:
-  repository: REPLACE_ECR_REGISTRY/usf-devops/frontend
-  tag: git-replaceme
+  repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/frontend
+  tag: git-replaceme   # populated by promote-prod.yaml on stable release tag
 
 ingress:
   enabled: true
-  host: app.prod.example.com
+  host: calmloop.space   # apex domain for the production marquee URL
 
 # frontend doesn't expose Prometheus metrics — keep ServiceMonitor off.
 monitoring:

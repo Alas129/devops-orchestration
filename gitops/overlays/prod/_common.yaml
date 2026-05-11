@@ -6,7 +6,7 @@ env: prod
 config:
   awsRegion: us-east-1
   dbHost: REPLACE_RDS_ENDPOINT     # filled from `terraform output rds_endpoint`
-  dbName: prodops_prod
+  dbName: devops_prod
   dbUser: app_prod
   useIamAuth: true
   natsUrl: nats://nats.messaging.svc.cluster.local:4222

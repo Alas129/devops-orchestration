@@ -1,0 +1,47 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: node-resource-critical
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: node-alerts
+    # kube-prometheus-stack's Prometheus selects PrometheusRules with this label.
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: node-resources-critical
+      rules:
+        - alert: NodeCPUCriticallyHigh
+          expr: |
+            100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Node CPU > 90% for 5m on {{ $labels.instance }}"
+            description: "Sustained CPU saturation can cause request timeouts and rollout aborts. Investigate Karpenter scaling or pod resource limits."
+            runbook_url: "https://github.com/Alas129/devops-orchestration/blob/main/RUNBOOK.md"
+
+        - alert: NodeMemoryCriticallyHigh
+          expr: |
+            (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Node memory > 90% used for 5m on {{ $labels.instance }}"
+            description: "Risk of OOMKilled pods and kubelet eviction. Consider raising Karpenter node size or evicting noisy neighbours."
+            runbook_url: "https://github.com/Alas129/devops-orchestration/blob/main/RUNBOOK.md"
+
+        - alert: NodeDiskCriticallyHigh
+          # Backstop for the kube-prometheus-stack default NodeFilesystemAlmostOutOfSpace —
+          # explicit critical rule with simpler 90% threshold for the demo dashboard.
+          expr: |
+            (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.*"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.*"})) * 100 > 90
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Node disk > 90% full on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+            description: "Logs, container images, or RDS spillover may fill the disk. kubelet will start evicting once it hits ImageGCHighThresholdPercent."
+            runbook_url: "https://github.com/Alas129/devops-orchestration/blob/main/RUNBOOK.md"
