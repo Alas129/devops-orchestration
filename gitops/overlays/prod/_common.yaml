@@ -5,7 +5,13 @@ env: prod
 
 config:
   awsRegion: us-east-1
-  dbHost: REPLACE_RDS_ENDPOINT     # filled from `terraform output rds_endpoint`
+  # Use a stable CNAME (managed in Cloudflare) → underlying RDS endpoint.
+  # The CNAME survives RDS recreation; the bare AWS-generated hostname
+  # `usf-devops-prod.<random>.us-east-1.rds.amazonaws.com` does not.
+  # Cloudflare record is created by `infra/terraform/modules/dns` after
+  # the prod RDS exists; see `tools/populate-prod-from-tf.sh` for the
+  # one-shot bootstrap if you skip the Cloudflare module.
+  dbHost: prod-db.calmloop.space
   dbName: devops_prod
   dbUser: app_prod
   useIamAuth: true
@@ -16,8 +22,14 @@ config:
 
 ingress:
   className: alb
-  certificateArn: REPLACE_PROD_ACM_ARN
-  accessLogsBucket: REPLACE_PROD_ALB_LOGS_BUCKET   # `terraform output alb_logs_bucket`
+  # certificateArn empty → AWS Load Balancer Controller auto-discovers an
+  # ACM cert in the cluster's region whose SAN matches the ingress host.
+  # The prod ACM cert is created by `infra/terraform/envs/prod/main.tf`
+  # (module.acm_prod) with SANs covering app/api.prod.calmloop.space etc.,
+  # so no overlay edit is needed post-apply.
+  certificateArn: ""
+  # Predictable from TF: "${var.project}-alb-logs-prod-${account_id}"
+  accessLogsBucket: usf-devops-alb-logs-prod-164856787183
   wafAclArn: ""                                     # set after creating WAFv2 ACL
 
 # Critical workloads in prod schedule before opportunistic ones.

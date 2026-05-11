@@ -32,3 +32,4 @@ jobs:
     secrets:
       AWS_ROLE_ECR_PUSH: ${{ secrets.AWS_ROLE_ECR_PUSH }}
       GITOPS_BOT_TOKEN: ${{ secrets.GITOPS_BOT_TOKEN }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

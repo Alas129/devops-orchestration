@@ -26,6 +26,8 @@ on:
         required: false
       GITOPS_BOT_TOKEN:
         required: false
+      SLACK_WEBHOOK_URL:
+        required: false
 
 permissions:
   id-token: write
@@ -83,6 +85,17 @@ jobs:
           name: coverage-${{ inputs.service }}-${{ github.sha }}
           path: apps/${{ inputs.service }}/coverage.out
           retention-days: 7
+
+      - name: Notify Slack — quality FAILED
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          COMMIT_MSG: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+        run: |
+          ./tools/slack-notify.sh FAIL "${{ inputs.service }} CI quality stage FAILED" \
+            "service - ${{ inputs.service }} | event - ${{ github.event_name }} | ref - ${{ github.ref_name }}" \
+            "blocked at - vet / lint / gosec / unit tests" \
+            "commit - ${COMMIT_MSG}"
 
   build-push:
     name: build & push (gated on AWS bootstrap)
@@ -235,3 +248,31 @@ jobs:
           done
           echo "exhausted 5 push retries"
           exit 1
+
+      # ── Slack notifications ────────────────────────────────────────────────
+      # On successful main-push: report image landed in ECR + dev overlay bumped.
+      # On failure (PR or push): report which service's CI broke.
+      # PR-time success is intentionally NOT reported — would be noisy.
+      - name: Notify Slack — image landed in dev
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          IMAGE_TAG: ${{ steps.meta.outputs.tag }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          ./tools/slack-notify.sh SUCCESS "${{ inputs.service }} image built and pushed to ECR" \
+            "service - ${{ inputs.service }} | env - dev | image tag - ${IMAGE_TAG}" \
+            "digest - ${IMAGE_DIGEST}" \
+            "dev overlay auto-bumped; ArgoCD will canary-roll within ~3min" \
+            "commit - ${COMMIT_MSG}"
+
+      - name: Notify Slack — CI FAILED
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          COMMIT_MSG: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+        run: |
+          ./tools/slack-notify.sh FAIL "${{ inputs.service }} CI FAILED" \
+            "service - ${{ inputs.service }} | event - ${{ github.event_name }} | ref - ${{ github.ref_name }}" \
+            "commit - ${COMMIT_MSG}"

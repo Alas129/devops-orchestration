@@ -11,8 +11,11 @@ ingress:
   pathPrefix: /api/v1/auth
 
 serviceAccount:
-  # Populated by tools/populate-prod-from-tf.sh after `terraform apply` on envs/prod.
-  irsaRoleArn: REPLACE_PROD_AUTH_SVC_IRSA_ARN
+  # IRSA role name = "${var.project}-prod-${service}" — predictable from
+  # infra/terraform/envs/prod/main.tf (`module "service_irsa"`). The role
+  # is created by `terraform apply` on envs/prod; this ARN is the value
+  # it WILL have, so no post-apply overlay edit is needed.
+  irsaRoleArn: arn:aws:iam::164856787183:role/usf-devops-prod-auth-svc
 
 externalSecret:
   enabled: true

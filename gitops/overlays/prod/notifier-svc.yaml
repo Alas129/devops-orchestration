@@ -11,8 +11,8 @@ ingress:
   pathPrefix: /api/v1/notifier
 
 serviceAccount:
-  # Populated by tools/populate-prod-from-tf.sh after `terraform apply` on envs/prod.
-  irsaRoleArn: REPLACE_PROD_NOTIFIER_SVC_IRSA_ARN
+  # IRSA role name = "${var.project}-prod-${service}" — predictable from TF code.
+  irsaRoleArn: arn:aws:iam::164856787183:role/usf-devops-prod-notifier-svc
 
 externalSecret:
   enabled: false

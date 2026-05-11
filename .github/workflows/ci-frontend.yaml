@@ -53,6 +53,17 @@ jobs:
         working-directory: apps/frontend
         run: npm run build
 
+      - name: Notify Slack — frontend quality FAILED
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          COMMIT_MSG: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+        run: |
+          ./tools/slack-notify.sh FAIL "frontend CI quality stage FAILED" \
+            "service - frontend | event - ${{ github.event_name }} | ref - ${{ github.ref_name }}" \
+            "blocked at - npm install / lint / build" \
+            "commit - ${COMMIT_MSG}"
+
   build-push:
     name: build & push (gated on AWS bootstrap)
     needs: quality
@@ -176,3 +187,28 @@ jobs:
           done
           echo "exhausted 5 push retries"
           exit 1
+
+      - name: Notify Slack — frontend image landed in dev
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          IMAGE_TAG: ${{ steps.meta.outputs.tag }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          ./tools/slack-notify.sh SUCCESS "frontend image built and pushed to ECR" \
+            "service - frontend | env - dev | image tag - ${IMAGE_TAG}" \
+            "digest - ${IMAGE_DIGEST}" \
+            "dev overlay auto-bumped; ArgoCD will blue-green roll within ~3min" \
+            "commit - ${COMMIT_MSG}"
+
+      - name: Notify Slack — frontend build-push FAILED
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          COMMIT_MSG: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+        run: |
+          ./tools/slack-notify.sh FAIL "frontend CI build-push stage FAILED" \
+            "service - frontend | event - ${{ github.event_name }} | ref - ${{ github.ref_name }}" \
+            "blocked at - docker build / scan / sign / push / overlay-bump" \
+            "commit - ${COMMIT_MSG}"
