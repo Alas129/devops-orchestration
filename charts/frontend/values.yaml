@@ -67,10 +67,12 @@ topologySpread:
   enabled: true
   maxSkew: 1
 
+# Backend services live in the same namespace as the frontend; use short DNS
+# so the chart works regardless of which env namespace it's released into.
 config:
-  authApiUrl: http://auth-svc.app.svc.cluster.local:8080
-  tasksApiUrl: http://tasks-svc.app.svc.cluster.local:8080
-  notifierApiUrl: http://notifier-svc.app.svc.cluster.local:8080
+  authApiUrl: http://auth-svc:8080
+  tasksApiUrl: http://tasks-svc:8080
+  notifierApiUrl: http://notifier-svc:8080
 
 monitoring:
   serviceMonitor:

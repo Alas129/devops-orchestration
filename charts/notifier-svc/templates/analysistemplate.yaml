@@ -13,7 +13,9 @@ spec:
   metrics:
     - name: success-rate
       interval: 30s
-      successCondition: result[0] >= {{ .Values.rollout.analysis.successRateThreshold }}
+      # Tolerate empty Prometheus results during the first canary step (no
+      # traffic yet → empty series → "reflect: slice index out of range").
+      successCondition: len(result) == 0 || result[0] >= {{ .Values.rollout.analysis.successRateThreshold }}
       failureLimit: 2
       provider:
         prometheus:
@@ -31,7 +33,7 @@ spec:
             }[2m]))
     - name: p95-latency
       interval: 30s
-      successCondition: result[0] <= {{ .Values.rollout.analysis.p95LatencyThreshold }}
+      successCondition: len(result) == 0 || result[0] <= {{ .Values.rollout.analysis.p95LatencyThreshold }}
       failureLimit: 2
       provider:
         prometheus:
