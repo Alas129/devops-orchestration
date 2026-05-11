@@ -1,7 +1,7 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/frontend
-  tag: git-74bdc9566489
-  digest: sha256:f5777aa7dce175c2e03eb9957f5bd4ecd709d070b6bd08be41e5d1ac151236cc
+  tag: git-c840c7fde763
+  digest: sha256:f8400073d6b76bfcb383c1618375d2f68b85f4b17d594e611f7dfa4578891f4f
 ingress:
   enabled: true
   host: app.dev.calmloop.space
