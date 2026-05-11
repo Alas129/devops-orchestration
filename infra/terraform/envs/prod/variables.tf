@@ -10,7 +10,7 @@ variable "region" {
 
 variable "repository" {
   type    = string
-  default = "alusigmi/devops-orchestration"
+  default = "Alas129/devops-orchestration"
 }
 
 variable "state_bucket" {

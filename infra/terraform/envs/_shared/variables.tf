@@ -13,7 +13,7 @@ variable "region" {
 variable "repository" {
   description = "GitHub repo identifier (owner/name)"
   type        = string
-  default     = "alusigmi/devops-orchestration"
+  default     = "Alas129/devops-orchestration"
 }
 
 variable "domain_name" {
