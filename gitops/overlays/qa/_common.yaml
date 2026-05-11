@@ -4,7 +4,7 @@ env: qa
 
 config:
   awsRegion: us-east-1
-  dbHost: REPLACE_RDS_ENDPOINT
+  dbHost: usf-devops-nonprod.c69ekamq4sxe.us-east-1.rds.amazonaws.com
   dbName: devops_qa
   dbUser: app_qa
   useIamAuth: true
@@ -12,7 +12,7 @@ config:
 
 ingress:
   className: alb
-  certificateArn: REPLACE_QA_ACM_ARN
+  certificateArn: arn:aws:acm:us-east-1:164856787183:certificate/8b5440ea-7edc-4fa8-9ab3-3831fe82945b
 
 monitoring:
   serviceMonitor: { enabled: true, interval: 30s }

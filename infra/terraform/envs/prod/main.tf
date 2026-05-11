@@ -95,11 +95,18 @@ module "backup" {
 # The Terraform postgresql provider can't reach private-subnet RDS from a
 # GHA runner outside the VPC. K8s Job inside the cluster handles it.
 
-# ── ACM (cluster + per-env certs) ──────────────────────────────────────────
+# ── ACM (prod + apex-shortcut aliases) ─────────────────────────────────────
+# Cert covers prod.<apex> + *.prod.<apex> + the apex-shortcut names so the
+# prod Grafana/ArgoCD also serve under argocd.<apex> and grafana.<apex>.
+# Justification: prod is the default URL muscle-memory; long-form is alias.
 module "acm_prod" {
   source  = "../../modules/acm"
   fqdn    = "prod.${local.domain_name}"
   zone_id = local.cloudflare_zone_id
+  additional_sans = [
+    "argocd.${local.domain_name}",
+    "grafana.${local.domain_name}",
+  ]
 }
 
 # ── Platform layer ─────────────────────────────────────────────────────────
@@ -110,10 +117,9 @@ module "platform" {
   vpc_id               = module.vpc.vpc_id
   oidc_provider_arn    = module.eks.oidc_provider_arn
   cloudflare_api_token = var.cloudflare_api_token
-  external_dns_domain_filters = [
-    "prod.${local.domain_name}",
-  ]
-  nats_replicas = 3 # 3-replica JetStream cluster for prod
+  # Filter is the APEX zone name (Cloudflare zone name), not subdomain.
+  external_dns_domain_filters = [local.domain_name]
+  nats_replicas               = 3 # 3-replica JetStream cluster for prod
 
   depends_on = [module.karpenter]
 }
@@ -128,6 +134,8 @@ module "argocd" {
   gitops_revision  = "main"
   cluster_app_dir  = "prod"
   admin_github_org = split("/", var.repository)[0]
+  # Apex-shortcut alias: argocd.<apex> also resolves to prod's ArgoCD.
+  additional_hostnames = ["argocd.${local.domain_name}"]
 
   depends_on = [module.platform]
 }
@@ -141,6 +149,8 @@ module "monitoring" {
   grafana_allowed_github_orgs = split("/", var.repository)[0]
   alert_email_from            = "alerts@${local.domain_name}"
   alert_email_to              = "ops@${local.domain_name}"
+  # Apex-shortcut alias: grafana.<apex> also resolves to prod's Grafana.
+  additional_hostnames = ["grafana.${local.domain_name}"]
 
   depends_on = [module.platform]
 }

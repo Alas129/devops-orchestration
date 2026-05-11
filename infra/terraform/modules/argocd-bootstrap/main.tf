@@ -53,6 +53,15 @@ resource "helm_release" "argocd" {
 }
 
 # Ingress for the ArgoCD UI/CLI. Uses the cluster's wildcard ACM cert.
+# `additional_hostnames` lets prod also serve under `argocd.<apex>` so the
+# short URL routes to the prod cluster's ArgoCD by default.
+locals {
+  argocd_hosts = concat(
+    ["argocd.${var.subdomain}.${var.domain_name}"],
+    var.additional_hostnames,
+  )
+}
+
 resource "kubernetes_ingress_v1" "argocd" {
   depends_on = [helm_release.argocd]
 
@@ -68,21 +77,24 @@ resource "kubernetes_ingress_v1" "argocd" {
       "alb.ingress.kubernetes.io/ssl-policy"       = "ELBSecurityPolicy-TLS13-1-2-2021-06"
       "alb.ingress.kubernetes.io/backend-protocol" = "HTTP"
       "alb.ingress.kubernetes.io/healthcheck-path" = "/healthz"
-      "external-dns.alpha.kubernetes.io/hostname"  = "argocd.${var.subdomain}.${var.domain_name}"
+      "external-dns.alpha.kubernetes.io/hostname"  = join(",", local.argocd_hosts)
     }
   }
 
   spec {
-    rule {
-      host = "argocd.${var.subdomain}.${var.domain_name}"
-      http {
-        path {
-          path      = "/"
-          path_type = "Prefix"
-          backend {
-            service {
-              name = "argocd-server"
-              port { number = 80 }
+    dynamic "rule" {
+      for_each = local.argocd_hosts
+      content {
+        host = rule.value
+        http {
+          path {
+            path      = "/"
+            path_type = "Prefix"
+            backend {
+              service {
+                name = "argocd-server"
+                port { number = 80 }
+              }
             }
           }
         }

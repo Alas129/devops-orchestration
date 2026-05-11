@@ -37,3 +37,9 @@ variable "admin_github_org" {
   description = "GitHub org name; users in 'org:admins' team get ArgoCD admin"
   default     = "alusigmi"
 }
+
+variable "additional_hostnames" {
+  type        = list(string)
+  description = "Extra DNS hosts to attach to the ArgoCD Ingress (e.g. ['argocd.calmloop.space'] for an apex-shortcut alias on prod)."
+  default     = []
+}

@@ -52,3 +52,9 @@ variable "slack_channel" {
   type    = string
   default = "#devops-alerts"
 }
+
+variable "additional_hostnames" {
+  type        = list(string)
+  description = "Extra hosts to bind on the Grafana Ingress (e.g. ['grafana.calmloop.space'] for an apex-shortcut alias on prod)."
+  default     = []
+}

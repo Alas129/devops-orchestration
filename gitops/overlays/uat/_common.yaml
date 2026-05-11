@@ -5,7 +5,7 @@ env: uat
 
 config:
   awsRegion: us-east-1
-  dbHost: REPLACE_RDS_ENDPOINT     # filled in once after `terraform apply` completes
+  dbHost: usf-devops-nonprod.c69ekamq4sxe.us-east-1.rds.amazonaws.com     # filled in once after `terraform apply` completes
   dbName: uatops_uat
   dbUser: app_uat
   useIamAuth: true
@@ -13,7 +13,7 @@ config:
 
 ingress:
   className: alb
-  certificateArn: REPLACE_UAT_ACM_ARN
+  certificateArn: arn:aws:acm:us-east-1:164856787183:certificate/4a64fdcf-d8e6-417d-91e6-538a46d539b6
 
 monitoring:
   serviceMonitor: { enabled: true, interval: 30s }

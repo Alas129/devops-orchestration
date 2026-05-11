@@ -100,13 +100,11 @@ module "platform" {
   vpc_id               = module.vpc.vpc_id
   oidc_provider_arn    = module.eks.oidc_provider_arn
   cloudflare_api_token = var.cloudflare_api_token
-  external_dns_domain_filters = [
-    "dev.${local.domain_name}",
-    "qa.${local.domain_name}",
-    "uat.${local.domain_name}",
-    "nonprod.${local.domain_name}",
-  ]
-  nats_replicas = 1
+  # Filter is the APEX zone name (Cloudflare zone name), not subdomain.
+  # external-dns checks "zone IN domain_filter" before managing records;
+  # subdomain filters caused "no hosted zone matching" skips.
+  external_dns_domain_filters = [local.domain_name]
+  nats_replicas               = 1
 
   depends_on = [module.karpenter]
 }

@@ -1,10 +1,10 @@
 image:
-  repository: REPLACE_ECR_REGISTRY/usf-devops/frontend
+  repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/frontend
   tag: git-replaceme
 
 ingress:
   enabled: true
-  host: app.uat.example.com
+  host: app.uat.calmloop.space
 
 # frontend doesn't expose Prometheus metrics — keep ServiceMonitor off.
 monitoring:

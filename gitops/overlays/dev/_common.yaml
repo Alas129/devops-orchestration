@@ -5,7 +5,7 @@ env: dev
 
 config:
   awsRegion: us-east-1
-  dbHost: REPLACE_RDS_ENDPOINT     # filled in once after `terraform apply` completes
+  dbHost: usf-devops-nonprod.c69ekamq4sxe.us-east-1.rds.amazonaws.com     # filled in once after `terraform apply` completes
   dbName: devops_dev
   dbUser: app_dev
   useIamAuth: true
@@ -13,7 +13,7 @@ config:
 
 ingress:
   className: alb
-  certificateArn: REPLACE_DEV_ACM_ARN
+  certificateArn: arn:aws:acm:us-east-1:164856787183:certificate/f9d36d4e-9462-4a9d-91ef-1ba6d579aaa5
 
 monitoring:
   serviceMonitor: { enabled: true, interval: 30s }

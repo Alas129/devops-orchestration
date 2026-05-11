@@ -1,18 +1,18 @@
 image:
-  repository: REPLACE_ECR_REGISTRY/usf-devops/tasks-svc
+  repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/tasks-svc
   tag: git-replaceme
 
 migration:
   enabled: true
-  image: REPLACE_ECR_REGISTRY/usf-devops/tasks-svc-migrate
+  image: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/tasks-svc-migrate
 
 ingress:
   enabled: true
-  host: api.dev.example.com
+  host: api.dev.calmloop.space
   pathPrefix: /api/v1/tasks
 
 serviceAccount:
-  irsaRoleArn: REPLACE_DEV_TASKS_SVC_IRSA_ARN
+  irsaRoleArn: arn:aws:iam::164856787183:role/usf-devops-nonprod-dev-tasks-svc
 
 externalSecret:
   enabled: true

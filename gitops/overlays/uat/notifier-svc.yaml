@@ -1,18 +1,18 @@
 image:
-  repository: REPLACE_ECR_REGISTRY/usf-devops/notifier-svc
+  repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/notifier-svc
   tag: git-replaceme
 
 migration:
   enabled: true
-  image: REPLACE_ECR_REGISTRY/usf-devops/notifier-svc-migrate
+  image: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/notifier-svc-migrate
 
 ingress:
   enabled: true
-  host: api.uat.example.com
+  host: api.uat.calmloop.space
   pathPrefix: /api/v1/notifier
 
 serviceAccount:
-  irsaRoleArn: REPLACE_UAT_NOTIFIER_SVC_IRSA_ARN
+  irsaRoleArn: arn:aws:iam::164856787183:role/usf-devops-nonprod-uat-notifier-svc
 
 externalSecret:
   enabled: false

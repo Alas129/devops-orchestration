@@ -133,7 +133,13 @@ resource "helm_release" "kube_prometheus_stack" {
       ingress = {
         enabled          = true
         ingressClassName = "alb"
-        hosts            = ["grafana.${var.subdomain}.${var.domain_name}"]
+        # `additional_hostnames` (prod only) adds an apex-shortcut like
+        # grafana.calmloop.space so the prod Grafana also serves under the
+        # short URL — handy for muscle-memory.
+        hosts = concat(
+          ["grafana.${var.subdomain}.${var.domain_name}"],
+          var.additional_hostnames,
+        )
         annotations = {
           "alb.ingress.kubernetes.io/scheme"           = "internet-facing"
           "alb.ingress.kubernetes.io/target-type"      = "ip"
@@ -141,7 +147,10 @@ resource "helm_release" "kube_prometheus_stack" {
           "alb.ingress.kubernetes.io/certificate-arn"  = var.certificate_arn
           "alb.ingress.kubernetes.io/ssl-policy"       = "ELBSecurityPolicy-TLS13-1-2-2021-06"
           "alb.ingress.kubernetes.io/healthcheck-path" = "/api/health"
-          "external-dns.alpha.kubernetes.io/hostname"  = "grafana.${var.subdomain}.${var.domain_name}"
+          "external-dns.alpha.kubernetes.io/hostname" = join(",", concat(
+            ["grafana.${var.subdomain}.${var.domain_name}"],
+            var.additional_hostnames,
+          ))
         }
       }
 

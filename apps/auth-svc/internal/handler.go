@@ -20,7 +20,7 @@ func (a *App) healthz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
+	_, _ = w.Write([]byte("ok\n"))
 }
 
 func (a *App) livez(w http.ResponseWriter, _ *http.Request) {
