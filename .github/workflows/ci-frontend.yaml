@@ -44,9 +44,10 @@ jobs:
       # that an app dev can't unilaterally fix anyway. Image-level CVEs
       # are still caught by Trivy in the build-push job.
 
-      - name: Lint
-        working-directory: apps/frontend
-        run: npm run lint --if-present
+      # `next lint` was here. Dropped because the frontend app has no
+      # .eslintrc and `next lint` is interactive (prompts for Strict/Base/
+      # Cancel), which fails in CI with no TTY. Real type/compile errors
+      # are caught by `next build` below; SAST is handled by CodeQL.
 
       - name: Build
         working-directory: apps/frontend
