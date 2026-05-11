@@ -1,7 +1,7 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/tasks-svc
-  tag: git-937e1b34208f
-  digest: sha256:d85f0bfb01c249670803cd72b13d167f52ff4b21f5e863875d2656ea967071df
+  tag: git-717024bc2a69
+  digest: sha256:446124c5652f51957e9ebc8f60ed9a4a14b51a63de7e8c7356bc7001541bad84
 migration:
   enabled: false
 ingress:
