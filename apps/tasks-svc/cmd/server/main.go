@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	tasksvc "github.com/alusigmi/devops-orchestration/tasks-svc/internal"
+	tasksvc "github.com/Alas129/devops-orchestration/tasks-svc/internal"
 )
 
 func main() {
