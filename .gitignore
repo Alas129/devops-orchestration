@@ -47,3 +47,6 @@ kubeconfig*
 
 # Local validation render output (helm template + kubeconform)
 .render/
+
+# Claude Code session metadata
+.claude/

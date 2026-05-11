@@ -8,9 +8,15 @@ module "karpenter" {
 
   cluster_name = var.cluster_name
 
-  # Use IRSA-style service account.
-  enable_irsa            = true
-  irsa_oidc_provider_arn = var.oidc_provider_arn
+  # IRSA trust must match the actual Helm-installed ServiceAccount path:
+  # `system:serviceaccount:<namespace>:<sa-name>`. We install Karpenter into
+  # kube-system (so it inherits cluster-critical scheduling); the upstream
+  # module defaults to `karpenter:karpenter`, hence we override here.
+  namespace                       = "kube-system"
+  service_account                 = "karpenter"
+  enable_irsa                     = true
+  irsa_oidc_provider_arn          = var.oidc_provider_arn
+  irsa_namespace_service_accounts = ["kube-system:karpenter"]
 
   # Permissions Karpenter uses to inspect the cluster + manage nodes.
   node_iam_role_use_name_prefix   = false
