@@ -59,6 +59,7 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
+              protocol: TCP
           env:
             - name: PORT
               value: "{{ .Values.service.port }}"
