@@ -10,11 +10,19 @@ class Config:
     # ── secrets (mounted from K8s Secret backed by ExternalSecret) ────────
     slack_signing_secret: str
     anthropic_api_key: str
+    github_api_token: str          # PAT with repo+workflow scopes (or empty → write tools refuse)
 
     # ── runtime ──────────────────────────────────────────────────────────
     model: str                     # e.g. "claude-sonnet-4-5"
     max_tool_iterations: int       # safety: stop after N tool-call rounds
     cluster_name: str              # for context in prompts
+    repository: str                # "owner/repo" used by GitHub API tools
+
+    # ── access control ──────────────────────────────────────────────────
+    # Comma-separated Slack user IDs allowed to trigger WRITE tools.
+    # Empty → write tools refused for everyone (read-only mode).
+    # The Slack user_id (e.g. U07ABCDE12) is sent in every slash command payload.
+    allowed_write_users: frozenset[str]
 
     # ── in-cluster service endpoints ────────────────────────────────────
     prom_url: str

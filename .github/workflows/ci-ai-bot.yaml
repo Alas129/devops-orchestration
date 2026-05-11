@@ -1,0 +1,180 @@
+name: CI · ai-bot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/ai-bot/**'
+      - 'charts/ai-bot/**'
+      - '.github/workflows/ci-ai-bot.yaml'
+  pull_request:
+    paths:
+      - 'apps/ai-bot/**'
+      - 'charts/ai-bot/**'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: write
+  security-events: write
+  pull-requests: read
+
+jobs:
+  quality:
+    name: quality (lint/test)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        working-directory: apps/ai-bot
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff pyright
+
+      - name: Ruff lint
+        working-directory: apps/ai-bot
+        run: ruff check ai_bot/ || echo "WARN: ruff issues — not blocking"
+
+      - name: Import sanity (config must parse)
+        working-directory: apps/ai-bot
+        env:
+          SLACK_SIGNING_SECRET: dummy
+          ANTHROPIC_API_KEY: dummy
+        run: python -c "from ai_bot import config; print(config.Config.from_env())"
+
+      - name: Notify Slack — quality FAILED
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          COMMIT_MSG: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+        run: |
+          ./tools/slack-notify.sh FAIL "ai-bot CI quality stage FAILED" \
+            "service - ai-bot | event - ${{ github.event_name }} | ref - ${{ github.ref_name }}" \
+            "blocked at - ruff / import sanity" \
+            "commit - ${COMMIT_MSG}"
+
+  build-push:
+    name: build & push (gated on AWS bootstrap)
+    needs: quality
+    if: ${{ vars.AWS_BOOTSTRAPPED == 'true' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+      image_digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute tag
+        id: meta
+        run: echo "tag=git-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ECR_PUSH }}
+          aws-region: us-east-1
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push image
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/ai-bot
+          push: true
+          provenance: false
+          tags: ${{ vars.ECR_REGISTRY }}/usf-devops/ai-bot:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy scan (advisory)
+        uses: aquasecurity/trivy-action@0.35.0
+        continue-on-error: true
+        with:
+          image-ref: ${{ vars.ECR_REGISTRY }}/usf-devops/ai-bot:${{ steps.meta.outputs.tag }}
+          format: sarif
+          output: trivy-ai-bot.sarif
+          severity: HIGH,CRITICAL
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-ai-bot.sarif
+          category: trivy-ai-bot
+
+      - uses: sigstore/cosign-installer@v3
+      - name: Cosign sign (keyless via OIDC)
+        env:
+          IMG: ${{ vars.ECR_REGISTRY }}/usf-devops/ai-bot@${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "$IMG"
+
+      - name: Bump overlay (with digest)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITOPS_BOT_TOKEN: ${{ secrets.GITOPS_BOT_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -e
+          if [ -z "${GITOPS_BOT_TOKEN:-}" ]; then
+            echo "GITOPS_BOT_TOKEN not set — skipping overlay bump"; exit 0
+          fi
+          git config user.name "gitops-bot"
+          git config user.email "gitops-bot@users.noreply.github.com"
+          REMOTE="https://x-access-token:${GITOPS_BOT_TOKEN}@github.com/${{ github.repository }}.git"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            python3 - <<PY
+          import yaml, os
+          p = "gitops/overlays/ai-bot/values.yaml"
+          with open(p) as f: d = yaml.safe_load(f) or {}
+          img = d.setdefault("image", {})
+          img["tag"] = os.environ["TAG"]
+          img["digest"] = os.environ["DIGEST"]
+          with open(p, "w") as f: yaml.safe_dump(d, f, sort_keys=False, default_flow_style=False)
+          PY
+            git add gitops/overlays/ai-bot/values.yaml
+            if git diff --cached --quiet; then
+              echo "no overlay change to commit"; exit 0
+            fi
+            git commit -m "chore(ai-bot): bump to ${TAG} (${DIGEST}) [skip ci]"
+            if git push "${REMOTE}" HEAD:main; then
+              echo "pushed overlay bump on attempt ${attempt}"; exit 0
+            fi
+            sleep $((RANDOM % 8 + 2))
+          done
+          exit 1
+
+      - name: Notify Slack — ai-bot image landed
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          IMAGE_TAG: ${{ steps.meta.outputs.tag }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          ./tools/slack-notify.sh SUCCESS "ai-bot image built and pushed to ECR" \
+            "service - ai-bot | image tag - ${IMAGE_TAG}" \
+            "digest - ${IMAGE_DIGEST}" \
+            "ArgoCD will reconcile within ~3min" \
+            "commit - ${COMMIT_MSG}"
+
+      - name: Notify Slack — ai-bot build-push FAILED
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          COMMIT_MSG: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+        run: |
+          ./tools/slack-notify.sh FAIL "ai-bot CI build-push stage FAILED" \
+            "service - ai-bot | event - ${{ github.event_name }} | ref - ${{ github.ref_name }}" \
+            "commit - ${COMMIT_MSG}"

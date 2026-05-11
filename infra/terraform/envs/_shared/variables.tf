@@ -30,7 +30,7 @@ variable "cloudflare_api_token" {
 variable "service_names" {
   description = "Microservice / app short names (one ECR repo per name)"
   type        = list(string)
-  default     = ["frontend", "auth-svc", "tasks-svc", "notifier-svc", "migrate-runner"]
+  default     = ["frontend", "auth-svc", "tasks-svc", "notifier-svc", "migrate-runner", "ai-bot"]
 }
 
 variable "ecr_replication_regions" {

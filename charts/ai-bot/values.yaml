@@ -1,0 +1,56 @@
+image:
+  repository: ""
+  tag: "git-replaceme"
+  digest: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# All runtime knobs surfaced as env vars so overlays / IDP can tune without
+# rebuilding the image. Secrets come from a separate K8s Secret (ExternalSecret).
+config:
+  claudeModel: claude-sonnet-4-5
+  maxToolIterations: 10
+  clusterName: usf-devops-nonprod
+  promUrl: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+  lokiUrl: http://loki-stack.monitoring.svc.cluster.local:3100
+
+service:
+  port: 8080
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: alb
+  host: ai-bot.nonprod.calmloop.space
+  certificateArn: ""
+  wafAclArn: ""
+
+serviceAccount:
+  create: true
+  name: ai-bot
+  # Filled per-env (nonprod overlay sets to the IRSA role ARN).
+  irsaRoleArn: ""
+
+externalSecret:
+  enabled: true
+  ssmPathPrefix: /devops/ai-bot
+
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits:   { memory: 512Mi }
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+probes:
+  readiness: { path: /healthz, periodSeconds: 10 }
+  liveness:  { path: /livez,  periodSeconds: 30 }
+
+networkPolicy:
+  enabled: true

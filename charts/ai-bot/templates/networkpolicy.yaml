@@ -1,0 +1,54 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-bot
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ai-bot.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "ai-bot.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Slack POSTs come from the public internet via the ALB; ALB target IPs
+    # land in the cluster's node SG. Allow from kube-system (where ALB
+    # controller's target-binding lives) + the bot's own namespace.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: {{ .Values.service.port }}
+          protocol: TCP
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    # K8s API server
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { port: 443, protocol: TCP }
+    # In-cluster Prometheus + Loki (monitoring namespace)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - { port: 9090, protocol: TCP }     # prometheus
+        - { port: 3100, protocol: TCP }     # loki
+    # Outbound HTTPS for Slack response_url + Anthropic API.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32   # block IMDS
+      ports:
+        - { port: 443, protocol: TCP }
+{{- end }}

@@ -1,0 +1,27 @@
+# Env-specific values for the ai-bot Application. Mirrors the per-env overlay
+# pattern used by the app services; lives in its own dir because ai-bot is a
+# platform service (single instance per cluster), not a per-env workload.
+
+image:
+  repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/ai-bot
+  tag: git-replaceme
+  digest: ""
+
+ingress:
+  enabled: true
+  host: ai-bot.nonprod.calmloop.space
+  # Empty → ALB controller auto-discovers ACM cert by SAN. The cluster ACM
+  # cert (module.acm_cluster) covers *.nonprod.calmloop.space.
+  certificateArn: ""
+
+serviceAccount:
+  # Populated by infra/terraform/envs/nonprod/ai-bot.tf
+  irsaRoleArn: arn:aws:iam::164856787183:role/usf-devops-nonprod-ai-bot
+
+externalSecret:
+  enabled: true
+  ssmPathPrefix: /devops/ai-bot
+
+config:
+  claudeModel: claude-sonnet-4-5
+  clusterName: usf-devops-nonprod

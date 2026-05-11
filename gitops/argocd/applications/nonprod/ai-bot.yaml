@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-bot
+  namespace: argocd
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: devops-alerts
+    notifications.argoproj.io/subscribe.on-deployed.slack: devops-alerts
+spec:
+  project: nonprod
+  sources:
+    - repoURL: https://github.com/Alas129/devops-orchestration.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Alas129/devops-orchestration.git
+      targetRevision: main
+      path: charts/ai-bot
+      helm:
+        releaseName: ai-bot
+        valueFiles:
+          - values.yaml
+          - $values/gitops/overlays/ai-bot/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ai-bot
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }
