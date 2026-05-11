@@ -1,6 +1,6 @@
 image:
   repository: 164856787183.dkr.ecr.us-east-1.amazonaws.com/usf-devops/tasks-svc
-  tag: git-6c4ac06f9bf4
+  tag: git-937e1b34208f
 migration:
   enabled: false
 ingress:
