@@ -564,3 +564,7 @@ If they ask "why no UI promote button (click dev → qa in the app frontend)":
 
 Total demo time: **25 min** including narration.
 Active typing time: **~12 commands**.
+
+```
+claude --resume 69b78098-cd16-4bdb-b5b6-2f7a00f95b76
+```
