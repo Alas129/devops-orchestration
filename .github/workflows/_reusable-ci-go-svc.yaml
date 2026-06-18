@@ -135,7 +135,7 @@ jobs:
       # ── Service image ──────────────────────────────────────────────────────
       - name: Build & push service image
         id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: apps/${{ inputs.service }}
           file: apps/${{ inputs.service }}/Dockerfile
