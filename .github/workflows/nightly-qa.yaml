@@ -1,8 +1,10 @@
 name: Nightly · promote dev → qa
 
 on:
-  schedule:
-    - cron: '0 0 * * *'   # 00:00 UTC daily
+  # Cron schedule disabled — project is in teardown; nightly promote was emailing
+  # failures every day against torn-down infra. Re-add to resume nightly dev→qa:
+  #   schedule:
+  #     - cron: '0 0 * * *'   # 00:00 UTC daily
   workflow_dispatch:
 
 permissions:

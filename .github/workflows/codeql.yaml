@@ -5,8 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  schedule:
-    - cron: '0 6 * * 1'   # weekly Monday 06:00 UTC
+  # Cron schedule disabled — project is in teardown. Still runs on push/PR.
+  # Re-add to resume weekly scans:
+  #   schedule:
+  #     - cron: '0 6 * * 1'   # weekly Monday 06:00 UTC
 
 permissions:
   actions: read
