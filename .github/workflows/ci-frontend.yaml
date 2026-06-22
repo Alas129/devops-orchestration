@@ -107,7 +107,7 @@ jobs:
 
       # Trivy advisory only — see _reusable-ci-go-svc.yaml for rationale.
       - name: Trivy scan (advisory)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ vars.ECR_REGISTRY }}/usf-devops/frontend:${{ steps.meta.outputs.tag }}
           format: sarif
