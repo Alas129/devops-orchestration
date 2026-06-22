@@ -58,7 +58,7 @@ jobs:
           go vet ./...
 
       - name: gosec
-        uses: securego/gosec@v2.21.4
+        uses: securego/gosec@v2.27.1
         with:
           args: '-no-fail -fmt=sarif -out=gosec-${{ inputs.service }}.sarif ./apps/${{ inputs.service }}/...'
 
@@ -161,7 +161,7 @@ jobs:
       # app dev can't fix in this commit. CodeQL is the blocking SAST
       # gate; rubric coverage for image scanning + SBOM is still met.
       - name: Trivy scan (advisory)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ inputs.ecr_registry }}/usf-devops/${{ inputs.service }}:${{ steps.meta.outputs.tag }}
           format: sarif
